@@ -204,28 +204,50 @@ BASE_URL = os.getenv("BASE_URL", "http://localhost:8501")
 
 # Get URL parameters
 chat_link = st.query_params.get("chat", None)
+result_link = st.query_params.get("result", None)
 
-if not chat_link:
-    # Default page - Link generation
-    st.title("🎄 Santa's Secret Gift Helper")
-    st.markdown("""
-    Ho ho ho! 🎅✨
+# Check result page first
+if result_link:
+    # Results page
+    st.set_page_config(
+        page_title="Santa's Gift Ideas",
+        page_icon="🎁",
+        layout="centered"
+    )
     
-    Want to find the perfect gift for someone special? Let Santa's elves help!
+    st.title("🎁 Santa's Gift Suggestions")
+    suggestions = get_gift_suggestions(result_link)
     
-    1. Generate a special link below
-    2. Share it with the person you want to buy a gift for
-    3. They'll chat with one of Santa's elves about their preferences
-    4. You'll get gift suggestions based on their answers!
-    """)
-    
-    if st.button("Generate Magic Link ✨"):
-        new_link = generate_chat_link()
-        full_url = f"{BASE_URL}?chat={new_link}"
-        st.code(full_url, language=None)
-        st.info("Share this link with the person you want to buy a gift for! 🎁")
+    if suggestions:
+        st.markdown("""
+        Ho ho ho! 🎅✨
+        
+        Based on my chat with your special someone, here are some magical gift ideas I've carefully selected:
+        """)
+        
+        # Create a nice card-like display for each suggestion
+        for suggestion in suggestions:
+            st.markdown(f"""
+            <div style='background-color: #f0f8ff; padding: 15px; border-radius: 10px; margin: 10px 0;'>
+                {suggestion}
+            </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown("""
+        ---
+        💝 Remember, these are just suggestions! The best gifts come from the heart.
+        
+        🎄 Want to find a gift for someone else? [Start a new gift search](/)
+        """)
+        
+        # Add some festive decorations
+        st.snow()  # Add some snowfall effect
+    else:
+        st.error("Oh no! This gift suggestion link seems to be invalid. Please check with your friend for the correct link! 🎅")
+        st.markdown("Want to start your own gift search? [Click here](/) to begin!")
 
-else:
+# Then check chat page
+elif chat_link:
     # Chat page - existing chat functionality
     # Page config
     st.set_page_config(
@@ -313,28 +335,22 @@ else:
         else:
             st.warning("There's nothing to send to Santa yet! Have a chat with the elf first! 🎅")
 
-# Add this after the chat_link check
-result_link = st.query_params.get("result", None)
-
-if result_link:
-    # Results page
-    st.title("🎁 Santa's Gift Suggestions")
-    suggestions = get_gift_suggestions(result_link)
+else:
+    # Default page - Link generation
+    st.title("🎄 Santa's Secret Gift Helper")
+    st.markdown("""
+    Ho ho ho! 🎅✨
     
-    if suggestions:
-        st.markdown("""
-        Ho ho ho! 🎅✨
-        
-        Based on the chat with my helpful elf, here are some gift ideas for your special someone:
-        """)
-        
-        for suggestion in suggestions:
-            st.markdown(f"- {suggestion}")
-            
-        st.markdown("""
-        Remember, these are just suggestions! The best gifts often come from the heart. 🎄✨
-        
-        Happy gifting! 🎁
-        """)
-    else:
-        st.error("Oh no! This gift suggestion link seems to be invalid. Please check with your friend for the correct link! 🎅")
+    Want to find the perfect gift for someone special? Let Santa's elves help!
+    
+    1. Generate a special link below
+    2. Share it with the person you want to buy a gift for
+    3. They'll chat with one of Santa's elves about their preferences
+    4. You'll get gift suggestions based on their answers!
+    """)
+    
+    if st.button("Generate Magic Link ✨"):
+        new_link = generate_chat_link()
+        full_url = f"{BASE_URL}?chat={new_link}"
+        st.code(full_url, language=None)
+        st.info("Share this link with the person you want to buy a gift for! 🎁")

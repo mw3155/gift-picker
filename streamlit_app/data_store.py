@@ -1,4 +1,11 @@
 import uuid
+import openai
+import logging
+import os
+
+# Configure OpenAI if not already configured
+if not openai.api_key:
+    openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # In-memory storage
 data_store = {}
@@ -23,15 +30,47 @@ def get_gift_suggestions(link_b):
     return data_store[link_b]["gift_suggestions"]
 
 def generate_gift_ideas(messages):
-    """Generate gift ideas based on chat messages"""
-    # Extract user responses
-    user_responses = [msg["content"] for msg in messages if msg["role"] == "user"]
-    
-    # For now, return simple suggestions based on the responses
-    # In a real implementation, you might want to use GPT to analyze the responses
-    # and generate more meaningful suggestions
-    return [
-        "Based on their interests: A hobby-related gift",
-        "Something practical they mentioned wanting",
-        "A surprise gift that matches their preferences"
-    ]
+    """Generate gift ideas based on chat messages using GPT"""
+    try:
+        # Prepare the conversation for GPT
+        system_prompt = """You are Santa's gift suggestion expert. Based on the chat conversation between the elf and the gift recipient, suggest 5 specific gift ideas.
+        
+        Guidelines:
+        1. Each suggestion should be specific and actionable (e.g., "A high-quality yoga mat with carrying strap" rather than just "yoga equipment")
+        2. Include a brief reason why this gift would be good based on their responses
+        3. Suggestions should vary in price range
+        4. Keep the festive tone but be practical
+        5. Format each suggestion on a new line starting with "🎁"
+        """
+        
+        # Format the chat history for better context
+        chat_summary = "Chat summary:\n"
+        for msg in messages:
+            if msg["role"] == "assistant":
+                chat_summary += f"Elf asked: {msg['content']}\n"
+            elif msg["role"] == "user":
+                chat_summary += f"They answered: {msg['content']}\n"
+        
+        response = openai.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": chat_summary}
+            ],
+            temperature=0.7,
+            max_tokens=1000
+        )
+        
+        suggestions = response.choices[0].message.content.split("\n")
+        # Filter out empty lines and ensure each suggestion starts with 🎁
+        suggestions = [s.strip() for s in suggestions if s.strip()]
+        return suggestions
+        
+    except Exception as e:
+        logging.error(f"Error generating gift ideas: {e}")
+        # Fallback suggestions if API call fails
+        return [
+            "🎁 A hobby-related gift based on their interests",
+            "🎁 Something practical they mentioned wanting",
+            "🎁 A surprise gift that matches their preferences"
+        ]
