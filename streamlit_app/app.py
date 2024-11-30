@@ -38,16 +38,49 @@ You are one of Santa's trusted elves.
 Your task is to gather information about the user's preferences to help Santa choose the perfect gift. 
 **You are strictly prohibited from suggesting gifts or asking open-ended questions.**
 
-### Chain of Thought Process:
-1. First, analyze the conversation history to:
-   - Track which topics have been covered
-   - Identify gaps in information
-   - Note any patterns in user responses
-2. Then, decide:
-   - Which topic to explore next
-   - How specific the question should be
-   - What options would give the most useful information
-3. Finally, formulate the question with appropriate multiple-choice options
+Your response should be structured in XML format with the following tags:
+
+<thinking>
+- Track which topics have been covered
+- Identify gaps in information
+- Note patterns in user responses
+- Decide next topic to explore
+- Draft multiple choice options
+</thinking>
+
+<options>
+- List 4-5 specific multiple choice options that:
+  * Are distinct from each other
+  * Cover a good range of possibilities
+  * Are specific and concrete
+</options>
+
+<output>
+- Short, cheerful question introduction
+- Numbered multiple choice options
+</output>
+
+For example:
+<thinking>
+- Topics covered: age group
+- Next topic needed: gender
+- Options should be inclusive and respectful
+</thinking>
+
+<options>
+1. Male
+2. Female
+3. Non-binary
+4. Prefer not to say
+</options>
+
+<output>
+Ho ho ho! To help Santa pick something just right, could you tell me your gender?
+1. Male
+2. Female
+3. Non-binary
+4. Prefer not to say
+</output>
 
 ### 1. Objective:
 Gather clear and concise information from the user by asking **only structured multiple-choice questions.** The information you collect will be reviewed by Santa, who will make the final decision about the gift.
@@ -131,12 +164,14 @@ Santa is counting on you to stick to your role as a helper. If you stray from th
 
 picker_prompt = """
 You are a response picker that selects the best elf response from multiple candidates.
+Each candidate response will be formatted with XML tags (<thinking>, <options>, <output>).
+
 Follow these reasoning steps:
 
 1. For each candidate response:
-   a) Evaluate question clarity and format
-   b) Check topic relevance and progression
-   c) Assess option quality and range
+   a) Evaluate the thinking process and analysis
+   b) Check the quality of multiple choice options
+   c) Assess the final output's clarity and appeal
    d) Consider conversation context
 
 2. Compare candidates:
@@ -145,17 +180,17 @@ Follow these reasoning steps:
    - Check alignment with previous questions
 
 3. Make final selection based on:
-   - Question Quality (40%)
-   - Topic Selection (30%)
-   - Option Range (20%)
+   - Thinking Quality (30%)
+   - Options Quality (30%)
+   - Output Clarity (30%)
    - Conversation Flow (10%)
 
 Return your reasoning in this format:
 "[Selected number] - [Brief reason]
 Reasoning:
-- Question Quality: [comment]
-- Topic Selection: [comment]
-- Option Range: [comment]
+- Thinking: [comment]
+- Options: [comment]
+- Output: [comment]
 - Flow: [comment]"
 """
 
@@ -166,20 +201,33 @@ def generate_candidates(messages):
         model="gpt-4o",
         messages=[
             {"role": "system", "content": prompt},
-            {"role": "system", "content": "Show your reasoning before providing the question. Format: 'Reasoning: [your thought process]\n\nQuestion: [your question]'"},
+            {"role": "system", "content": """Format your response in XML tags as follows:
+<thinking>
+[Your analysis of conversation and reasoning]
+</thinking>
+
+<options>
+[Your drafted multiple choice options]
+</options>
+
+<output>
+[Your final question with numbered options]
+</output>"""},
             *messages
         ],
         temperature=0.3,
         max_tokens=1000,
         n=3
     )
-    # Extract only the question part from each response
+    for i, choice in enumerate(response.choices, 1):
+        logging.info(f"Candidate {i}:\n{choice.message.content}")
+    # Extract only the output part from each response
     cleaned_responses = []
     for choice in response.choices:
         content = choice.message.content
-        if "Question:" in content:
-            question = content.split("Question:", 1)[1].strip()
-            cleaned_responses.append(question)
+        if "<output>" in content:
+            output = content.split("<output>")[1].split("</output>")[0].strip()
+            cleaned_responses.append(output)
         else:
             cleaned_responses.append(content)
     return cleaned_responses
@@ -228,8 +276,6 @@ def get_ai_response(messages):
     try:
         # Generate candidates
         candidates = generate_candidates(messages)
-        for i, candidate in enumerate(candidates, 1):
-            logging.info(f"Candidate {i}:\n{candidate}")
         
         # Pick best response
         chosen_response = pick_best_response(messages, candidates)  # Remove picker_result
@@ -413,5 +459,8 @@ else:
     if st.button("Generate Magic Link ✨"):
         new_link = generate_chat_link()
         full_url = f"{BASE_URL}?chat={new_link}"
+        
+        # Display both clickable link and copyable code
+        st.markdown(f"**Click here to open:** [Magic Link 🎄]({full_url})")
         st.code(full_url, language=None)
         st.info("Share this link with the person you want to buy a gift for! 🎁")
