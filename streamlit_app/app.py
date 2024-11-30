@@ -1,55 +1,79 @@
 import streamlit as st
-from data_store import (
-    generate_chat_link,
-    save_chat_and_generate_result_link,
-    get_gift_suggestions,
+import openai
+from datetime import datetime
+
+# Initialize OpenAI client
+client = openai.OpenAI()  # Make sure to set OPENAI_API_KEY in your environment variables
+
+# Initialize session state for chat history if it doesn't exist
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+prompt = """
+You are a helpful AI assistant specializing in Christmas gift suggestions. 
+A friend wants to buy a gift for the user. But they need help finding the perfect gift.
+You will chat with the friend to find out what the user likes and needs.
+Ask questions and present numbered options for the friend to choose from to make it easy.
+"""
+
+
+def get_ai_response(messages):
+    """Get response from OpenAI API"""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": prompt},
+                *messages
+            ],
+            temperature=0.0,
+            max_tokens=150
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error getting response from OpenAI: {str(e)}")
+        return None
+
+# Page config
+st.set_page_config(
+    page_title="Christmas Gift AI Assistant",
+    page_icon="🎁",
+    layout="centered"
 )
 
-# Routing logic
-query_params = st.query_params
+# Title and description
+st.title("🎄 Christmas Gift AI Assistant")
+st.markdown("""
+Your friend wants to buy a gift for YOU!
 
-if "link_a" in query_params:
-    # User2's Chat Page
-    link_a = query_params["link_a"]
-    st.title("Answer a Few Questions")
+Answer the following questions to help them find the perfect gift.
+""")
+
+# Display chat messages
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
+# Chat input
+if prompt := st.chat_input("Type your message here..."):
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # Predefined questions
-    questions = [
-        "What is your favorite hobby?",
-        "What is something you've always wanted?",
-        "Do you prefer practical or sentimental gifts?",
-    ]
+    # Display user message
+    with st.chat_message("user"):
+        st.write(prompt)
     
-    responses = []
-    for question in questions:
-        response = st.text_input(question, key=question)
+    # Get and display assistant response
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        response = get_ai_response(st.session_state.messages)
+        
         if response:
-            responses.append(response)
-    
-    if len(responses) == len(questions):
-        if st.button("Submit"):
-            link_b = save_chat_and_generate_result_link(link_a, responses)
-            if link_b:
-                st.success("Chat completed!")
-                st.write(f"Share this link with User1: [View Suggestions](?link_b={link_b})")
-            else:
-                st.error("Invalid link!")
-else:
-    # Check if User1 is viewing suggestions
-    if "link_b" in query_params:
-        link_b = query_params["link_b"]
-        st.title("Gift Suggestions")
-        suggestions = get_gift_suggestions(link_b)
-        if suggestions:
-            st.write("Here are some gift ideas based on the answers:")
-            for suggestion in suggestions:
-                st.write(f"- {suggestion}")
-        else:
-            st.error("Invalid link!")
-    else:
-        # User1 generates Link A
-        st.title("Generate a Chat Link")
-        if st.button("Generate Link"):
-            link_a = generate_chat_link()
-            st.success("Link generated!")
-            st.write(f"Share this link with User2: [Start Chat](?link_a={link_a})")
+            message_placeholder.write(response)
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
+# Add a clear chat button
+if st.button("Clear Chat"):
+    st.session_state.messages = []
+    st.rerun()
