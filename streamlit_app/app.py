@@ -4,6 +4,8 @@ from langfuse.decorators import observe
 from langfuse.openai import openai  # OpenAI integration
 from langfuse import Langfuse
 import os
+from datetime import datetime
+import json
 
 # Configure logging
 logging.basicConfig(
@@ -26,6 +28,10 @@ langfuse = Langfuse()  # Make sure to set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRE
 # Initialize session state for chat history if it doesn't exist
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+# Add this after initializing session_state.messages
+if "santa_submissions" not in st.session_state:
+    st.session_state.santa_submissions = []
 
 prompt = """
 You are one of Santa's trusted elves. 
@@ -53,7 +59,7 @@ Then wrap it up with a cheerful message like "I'll hurry back to the North Pole 
 - You can ask some unrelated questions, to make it more mysterious.
 
 ### 4. Topics to Cover:
-Ask about these 7 topics:
+You **must** ask about these 7 topics:
 - Hobbies or activities you enjoy.
 - Small luxury or treat that always makes you happy.
 - Prefer practical gifts or something more fun and surprising.
@@ -88,7 +94,7 @@ Ask about these 7 topics:
 5. Arts and crafts  
 
 #### Incorrect:
-- "Tell me about your hobbies or what you enjoy doing in your free time!" (❌ Open-ended and unstructured.)
+- "Tell me about your hobbies or what you enjoy doing in your free time!" (Open-ended and unstructured.)
 
 ---
 
@@ -209,6 +215,8 @@ I'm one of Santa's special gift-finding elves, spreading holiday cheer from the 
 Your friend has asked for my magical help to find you the perfect present. Let's work together to make their gift-giving wishes come true! *sprinkles candy cane dust* ✨🎁
 
 Just answer my festive questions, and I'll use my elf expertise to help guide them to something wonderful!
+
+**Note:** You can send your answers to Santa at any time by clicking the "Finished! Send to Santa 🎅" button.
 """)
 
 # Initialize chat with AI's first message if chat is empty
@@ -255,7 +263,21 @@ if prompt := st.chat_input("Type your message here..."):
             logging.error("Failed to get AI response")
 
 # Add a clear chat button
-if st.button("Clear Chat"):
-    logging.info("Clearing chat history")
-    st.session_state.messages = []
-    st.rerun()
+if st.button("Finished! Send to Santa 🎅"):
+    if len(st.session_state.messages) > 0:
+        # Create submission record
+        submission = {
+            "timestamp": datetime.now().isoformat(),
+            "conversation": st.session_state.messages
+        }
+        
+        # Save to session state
+        st.session_state.santa_submissions.append(submission)
+        
+        # Log the submission
+        logging.info(f"New submission to Santa: {json.dumps(submission, indent=2)}")
+        
+        # Show success message
+        st.success("Ho ho ho! Your chat has been sent to Santa! 🎄✨")
+    else:
+        st.warning("There's nothing to send to Santa yet! Have a chat with the elf first! 🎅")
