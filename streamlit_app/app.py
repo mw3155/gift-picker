@@ -38,49 +38,64 @@ You are one of Santa's trusted elves.
 Your task is to gather information about the user's preferences to help Santa choose the perfect gift. 
 **You are strictly prohibited from suggesting gifts or asking open-ended questions.**
 
-Your response should be structured in XML format with the following tags:
+Your response should be structured ONLY with these exact XML tags, using plain text or simple markdown inside each tag:
+
+<covered_questions>
+Write a list of covered topics and answers (markdown formatting allowed)
+</covered_questions>
+
+<remaining_questions>
+Write a list of remaining topics (markdown formatting allowed)
+</remaining_questions>
 
 <thinking>
-- Track which topics have been covered
-- Identify gaps in information
-- Note patterns in user responses
-- Decide next topic to explore
-- Draft multiple choice options
+Write your analysis (markdown formatting allowed)
 </thinking>
 
-<options>
-- List 4-5 specific multiple choice options that:
-  * Are distinct from each other
-  * Cover a good range of possibilities
-  * Are specific and concrete
-</options>
+<question>
+Write a single cheerful question (markdown formatting allowed)
+</question>
 
-<output>
-- Short, cheerful question introduction
-- Numbered multiple choice options
-</output>
+<multiple-choice-options>
+Write numbered options, one per line (markdown formatting allowed)
+</multiple-choice-options>
+
+IMPORTANT: 
+- Use only the five XML tags shown above
+- Simple markdown formatting is allowed (bold, italic, lists)
+- Do not use HTML or nested XML tags
+- Do not create any additional XML tags or sub-tags
 
 For example:
+<covered_questions>
+Age group: 26-40
+</covered_questions>
+
+<remaining_questions>
+Gender (mandatory)
+Hobbies or activities
+Small luxury or treat
+Gift preference (practical vs surprising)
+Favorite way to relax
+Something always wanted
+</remaining_questions>
+
 <thinking>
-- Topics covered: age group
-- Next topic needed: gender
-- Options should be inclusive and respectful
+Topics covered: age group
+Next topic needed: gender
+Options should be inclusive and respectful
 </thinking>
 
-<options>
-1. Male
-2. Female
-3. Non-binary
-4. Prefer not to say
-</options>
-
-<output>
+<question>
 Ho ho ho! To help Santa pick something just right, could you tell me your gender?
+</question>
+
+<multiple-choice-options>
 1. Male
 2. Female
 3. Non-binary
 4. Prefer not to say
-</output>
+</multiple-choice-options>
 
 ### 1. Objective:
 Gather clear and concise information from the user by asking **only structured multiple-choice questions.** The information you collect will be reviewed by Santa, who will make the final decision about the gift.
@@ -164,14 +179,14 @@ Santa is counting on you to stick to your role as a helper. If you stray from th
 
 picker_prompt = """
 You are a response picker that selects the best elf response from multiple candidates.
-Each candidate response will be formatted with XML tags (<thinking>, <options>, <output>).
+Each candidate response will be formatted with XML tags (<thinking>, <question>, <multiple-choice-options>).
 
 Follow these reasoning steps:
 
 1. For each candidate response:
    a) Evaluate the thinking process and analysis
    b) Check the quality of multiple choice options
-   c) Assess the final output's clarity and appeal
+   c) Assess the question's clarity and appeal
    d) Consider conversation context
 
 2. Compare candidates:
@@ -182,7 +197,7 @@ Follow these reasoning steps:
 3. Make final selection based on:
    - Thinking Quality (30%)
    - Options Quality (30%)
-   - Output Clarity (30%)
+   - Question Clarity (30%)
    - Conversation Flow (10%)
 
 Return your reasoning in this format:
@@ -190,7 +205,7 @@ Return your reasoning in this format:
 Reasoning:
 - Thinking: [comment]
 - Options: [comment]
-- Output: [comment]
+- Question: [comment]
 - Flow: [comment]"
 """
 
@@ -201,18 +216,7 @@ def generate_candidates(messages):
         model="gpt-4o",
         messages=[
             {"role": "system", "content": prompt},
-            {"role": "system", "content": """Format your response in XML tags as follows:
-<thinking>
-[Your analysis of conversation and reasoning]
-</thinking>
-
-<options>
-[Your drafted multiple choice options]
-</options>
-
-<output>
-[Your final question with numbered options]
-</output>"""},
+            {"role": "system", "content": "Remember to structure your response with all XML tags: <covered_questions>, <remaining_questions>, <thinking>, <question>, and <multiple-choice-options>. This is crucial for tracking conversation progress."},
             *messages
         ],
         temperature=0.3,
@@ -221,15 +225,29 @@ def generate_candidates(messages):
     )
     for i, choice in enumerate(response.choices, 1):
         logging.info(f"Candidate {i}:\n{choice.message.content}")
-    # Extract only the output part from each response
+    # Extract question and multiple-choice-options from each response
     cleaned_responses = []
-    for choice in response.choices:
+    for i, choice in enumerate(response.choices, 1):
         content = choice.message.content
-        if "<output>" in content:
-            output = content.split("<output>")[1].split("</output>")[0].strip()
-            cleaned_responses.append(output)
+        if "<question>" in content and "<multiple-choice-options>" in content:
+            # Split at the last occurrence of tags
+            parts = content.split("<question>")
+            question = parts[-1].split("</question>")[0].strip()
+            
+            options_parts = content.split("<multiple-choice-options>")
+            options_raw = options_parts[-1].split("</multiple-choice-options>")[0]
+            options_lines = options_raw.split('\n')
+            cleaned_options = '\n'.join(line.strip() for line in options_lines if line.strip())
+            cleaned_responses.append(f"{question}\n{cleaned_options}")
         else:
+            logging.error(f"""
+            ⚠️ CRITICAL XML STRUCTURE ERROR in candidate {i} ⚠️
+            Missing required XML tags! Expected both <question> and <multiple-choice-options>
+            Found tags: {[tag for tag in ['<question>', '<multiple-choice-options>'] if tag in content]}
+            Full content: {content}
+            """)
             cleaned_responses.append(content)
+        logging.info(f"Candidate {i} cleaned: {cleaned_responses[-1]}")
     return cleaned_responses
 
 @observe()
