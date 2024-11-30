@@ -3,7 +3,7 @@ import streamlit as st
 import openai  # Change to direct import
 import os
 from datetime import datetime
-from data_store import generate_chat_link, save_chat_and_generate_result_link, get_gift_suggestions
+from data_store import generate_chat_link, save_chat_and_generate_result_link, get_gift_suggestions, is_valid_email
 
 # Configure base URL
 BASE_URL = os.getenv("BASE_URL", "https://gift-picker.streamlit.app")
@@ -410,17 +410,49 @@ else:
     
     Want to find the perfect gift for someone special? Let Santa's elves help!
     
-    1. Generate a special link below
-    2. Share it with the person you want to buy a gift for
+    1. Set your budget and contact details below
+    2. Generate and share the magic link with the person you want to buy a gift for
     3. They'll chat with one of Santa's elves about their preferences
     4. You'll get gift suggestions based on their answers!
     """)
     
+    # Add budget selection
+    budget_ranges = [
+        "Under $25",
+        "$25 - $50",
+        "$50 - $100",
+        "$100 - $200",
+        "$200 - $500",
+        "Over $500"
+    ]
+    budget = st.select_slider(
+        "Select your budget range 💰",
+        options=budget_ranges,
+        value="$50 - $100"
+    )
+    
+    # Add email input
+    email = st.text_input(
+        "Your email address 📧",
+        help="We'll notify you when they complete the questionnaire!"
+    )
+    
+    # Generate link button with validation
     if st.button("Generate Magic Link ✨"):
-        new_link = generate_chat_link()
-        full_url = f"{BASE_URL}?chat={new_link}"
-        
-        # Display both clickable link and copyable code
-        st.markdown(f"**Click here to open:** [Magic Link 🎄]({full_url})")
-        st.code(full_url, language=None)
-        st.info("Share this link with the person you want to buy a gift for! 🎁")
+        if not email:
+            st.warning("Please enter your email address! 📧")
+        elif not is_valid_email(email):
+            st.error("Please enter a valid email address! 📧")
+        else:
+            new_link = generate_chat_link(budget=budget, email=email)
+            full_url = f"{BASE_URL}?chat={new_link}"
+            
+            st.success("Magic link generated successfully! ✨")
+            # Display both clickable link and copyable code
+            st.markdown(f"**Click here to open:** [Magic Link 🎄]({full_url})")
+            st.code(full_url, language=None)
+            st.info("""
+            Share this link with the person you want to buy a gift for! 🎁
+            
+            We'll notify you at {email} when they complete the questionnaire.
+            """)

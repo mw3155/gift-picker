@@ -2,6 +2,9 @@ import uuid
 import openai
 import logging
 import os
+from typing import Optional
+from datetime import datetime
+import re
 
 # Configure OpenAI if not already configured
 if not openai.api_key:
@@ -10,18 +13,59 @@ if not openai.api_key:
 # In-memory storage
 data_store = {}
 
-def generate_chat_link():
-    link_a = str(uuid.uuid4())
-    data_store[link_a] = {"user2_responses": [], "result_link": None}
-    return link_a
+def is_valid_email(email: str) -> bool:
+    """Validate email format using regex pattern"""
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    return bool(re.match(pattern, email))
+
+def save_chat_metadata(chat_id: str, metadata: dict) -> None:
+    """Save chat metadata to storage"""
+    if chat_id not in data_store:
+        data_store[chat_id] = {}
+    data_store[chat_id].update(metadata)
+
+def generate_chat_link(budget: Optional[str] = None, email: Optional[str] = None) -> str:
+    """Generate a unique chat link and store initial metadata"""
+    chat_id = str(uuid.uuid4())
+    
+    # Store metadata
+    metadata = {
+        'created_at': datetime.now().isoformat(),
+        'budget': budget,
+        'notification_email': email,
+        'status': 'pending'  # pending, completed
+    }
+    
+    # Save metadata to your storage
+    save_chat_metadata(chat_id, metadata)
+    
+    return chat_id
 
 def save_chat_and_generate_result_link(link_a, responses):
     if link_a not in data_store:
         return None
+    
     link_b = str(uuid.uuid4())
-    data_store[link_a]["user2_responses"] = responses
-    data_store[link_a]["result_link"] = link_b
-    data_store[link_b] = {"gift_suggestions": generate_gift_ideas(responses)}
+    data_store[link_a].update({
+        "user2_responses": responses,
+        "result_link": link_b,
+        "status": "completed"  # Update status when chat is complete
+    })
+    
+    # Get the budget from metadata for gift suggestions
+    budget = data_store[link_a].get('budget')
+    data_store[link_b] = {
+        "gift_suggestions": generate_gift_ideas(responses, budget),
+        "parent_chat": link_a  # Store reference to original chat
+    }
+    
+    # Send notification if email is available
+    if email := data_store[link_a].get('notification_email'):
+        try:
+            send_completion_notification(email, link_b)
+        except Exception as e:
+            logging.error(f"Failed to send notification email: {e}")
+    
     return link_b
 
 def get_gift_suggestions(link_b):
@@ -29,7 +73,7 @@ def get_gift_suggestions(link_b):
         return None
     return data_store[link_b]["gift_suggestions"]
 
-def generate_gift_ideas(messages):
+def generate_gift_ideas(messages, budget: Optional[str] = None):
     """Generate gift ideas based on chat messages using GPT"""
     try:
         # Prepare the conversation for GPT
@@ -38,10 +82,13 @@ def generate_gift_ideas(messages):
         Guidelines:
         1. Each suggestion should be specific and actionable (e.g., "A high-quality yoga mat with carrying strap" rather than just "yoga equipment")
         2. Include a brief reason why this gift would be good based on their responses
-        3. Suggestions should vary in price range
+        3. Keep suggestions within the specified budget range
         4. Keep the festive tone but be practical
         5. Format each suggestion on a new line starting with "🎁"
         """
+        
+        if budget:
+            system_prompt += f"\n\nBudget range: {budget}"
         
         # Format the chat history for better context, excluding the last assistant message
         chat_summary = "Chat summary:\n"
@@ -80,3 +127,10 @@ def generate_gift_ideas(messages):
             "🎁 Something practical they mentioned wanting",
             "🎁 A surprise gift that matches their preferences"
         ]
+
+def send_completion_notification(email: str, result_link: str) -> None:
+    """Send email notification when chat is completed"""
+    # TODO: Implement email sending functionality
+    # For now, just log that we would send an email
+    logging.info(f"Would send completion notification to {email} for result {result_link}")
+    pass
