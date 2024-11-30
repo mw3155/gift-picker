@@ -27,6 +27,8 @@ langfuse = Langfuse()  # Make sure to set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRE
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+closing_words = "Ho ho ho! That's all I need to know!"
+
 prompt = """
 You are one of Santa's trusted elves. 
 Your task is to gather information about the user's preferences to help Santa choose the perfect gift. 
@@ -34,6 +36,10 @@ Your task is to gather information about the user's preferences to help Santa ch
 
 ### 1. Objective:
 Gather clear and concise information from the user by asking **only structured multiple-choice questions.** The information you collect will be reviewed by Santa, who will make the final decision about the gift.
+Strategy: 
+First ask one question for each of the 7 topics. 
+Then go deeper into one topic, asking 2-3 questions about it.
+Then wrap it up with the words "{closing_words}" and a cheerful message like "I'll hurry back to the North Pole and share everything with Santa! *jingles bells excitedly* 🔔❄️ Have a magical day! 🎄"
 
 ### 2. Elf's Role and Restrictions:
 - **You cannot suggest gifts or examples of gifts.** Only Santa can decide what the gift will be. Your role is purely information gathering.
@@ -49,7 +55,7 @@ Gather clear and concise information from the user by asking **only structured m
 - You can ask some unrelated questions, to make it more mysterious.
 
 ### 4. Topics to Cover:
-Ask about 5-7 of the following areas:
+Ask about these 7 topics:
 - Hobbies or activities you enjoy.
 - Small luxury or treat that always makes you happy.
 - Prefer practical gifts or something more fun and surprising.
@@ -61,7 +67,7 @@ Ask about 5-7 of the following areas:
 ### 5. Formatting Rules:
 - Every question must include **only numbered multiple-choice options.** No open-ended or vague follow-ups are allowed.
 - Keep responses clear and concise. Avoid adding unnecessary comments or speculations.
-- After asking all questions, ask one last question, wrap it up by saying "And that's all I need to know! Ho ho ho! 🎅✨"
+- After asking all questions, wrap it up with the words "{closing_words}" and a cheerful message like "I'll hurry back to the North Pole and share everything with Santa! *jingles bells excitedly* 🔔❄️ Have a magical day! 🎄"
 
 ### 6. Examples:
 #### Correct:
@@ -128,6 +134,7 @@ Keep your magical and festive tone.
 The previous failure is not visible to the user.
 So do not apologize or anything else, just generate a new response.
 Continue with the conversation as if nothing went wrong.
+Don't forget to cover all topics (especially gender, age group, and hobbies).
 """
 
 picker_prompt = """
@@ -141,7 +148,6 @@ Analyze each response based on these criteria:
    - Options cover a good range of possibilities
 
 2. Topic Selection (Also Important):
-   - Maintains good topic variety compared to previous questions
    - Stays high-level without going too specific
    - Appropriate for gift selection
    - Doesn't overlap with previous topics
@@ -240,11 +246,17 @@ def refine_response(messages, chosen_response, validation_result):
 @observe()
 def get_ai_response(messages):
     """Get response from OpenAI API with multiple candidates and selection"""
+    candidates = []
+    chosen_response = ""
     try:
         # Generate candidates
         candidates = generate_candidates(messages)
         for i, candidate in enumerate(candidates, 1):
             logging.info(f"Candidate {i}:\n{candidate}")
+
+        # check if we have closing words in the response
+        if closing_words in candidates[0]:
+            return candidates[0]
         
         # Pick best response
         chosen_response, picker_result = pick_best_response(messages, candidates)
@@ -263,7 +275,14 @@ def get_ai_response(messages):
             return refined_response
 
     except Exception as e:
-        st.error(f"Error getting response from OpenAI: {str(e)}")
+        if chosen_response:
+            # case: validation failed, but we have a response from picker
+            return chosen_response
+        elif candidates:
+            # case: picker failed, but we have candidates from generation, just return the first one
+            return candidates[0]
+        else:
+            st.error("Oh candy canes! 🎄 Something went wrong in Santa's workshop. Could you try that again, please? *jingles bells hopefully* 🔔")
         return None
 
 # Page config
@@ -319,14 +338,20 @@ if prompt := st.chat_input("Type your message here..."):
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         logging.info("Requesting AI response...")
-        response = get_ai_response(st.session_state.messages)
+        ai_response = get_ai_response(st.session_state.messages)
         
-        if response:
-            message_placeholder.markdown(response)
+        if ai_response:
+            message_placeholder.markdown(ai_response)
             # Add assistant response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.session_state.messages.append({"role": "assistant", "content": ai_response})
         else:
             logging.error("Failed to get AI response")
+
+        # chat finished
+        if ai_response and closing_words in ai_response:
+            # TODO: send email to user with the gift ideas
+            # for now just print complete chat history to window
+            st.write(st.session_state.messages)
 
 # Add a clear chat button
 if st.button("Clear Chat"):
