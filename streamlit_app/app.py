@@ -228,7 +228,17 @@ if result_link:
         # Create a nice card-like display for each suggestion
         for suggestion in suggestions:
             st.markdown(f"""
-            <div style='background-color: #f0f8ff; padding: 15px; border-radius: 10px; margin: 10px 0;'>
+            <div style='
+                background-color: #f0f8ff; 
+                padding: 20px; 
+                border-radius: 10px; 
+                margin: 10px 0;
+                border: 2px solid #e1e4e8;
+                color: #1e1e1e;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                font-size: 16px;
+                line-height: 1.5;
+            '>
                 {suggestion}
             </div>
             """, unsafe_allow_html=True)

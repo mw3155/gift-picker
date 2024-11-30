@@ -43,9 +43,15 @@ def generate_gift_ideas(messages):
         5. Format each suggestion on a new line starting with "🎁"
         """
         
-        # Format the chat history for better context
+        # Format the chat history for better context, excluding the last assistant message
         chat_summary = "Chat summary:\n"
-        for msg in messages:
+        # Convert messages to list to use indexing
+        messages_list = list(messages)
+        # Exclude last message if it's from assistant
+        if messages_list and messages_list[-1]["role"] == "assistant":
+            messages_list = messages_list[:-1]
+            
+        for msg in messages_list:
             if msg["role"] == "assistant":
                 chat_summary += f"Elf asked: {msg['content']}\n"
             elif msg["role"] == "user":
