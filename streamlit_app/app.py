@@ -1,6 +1,9 @@
 import logging
 import streamlit as st
-import openai
+from langfuse.decorators import observe
+from langfuse.openai import openai  # OpenAI integration
+from langfuse import Langfuse
+import os
 
 # Configure logging
 logging.basicConfig(
@@ -11,8 +14,14 @@ logging.basicConfig(
     ]
 )
 
-# Initialize OpenAI client
-client = openai.OpenAI()  # Make sure to set OPENAI_API_KEY in your environment variables
+# Configure OpenAI
+openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_type = "openai"
+openai.api_version = None  # Only needed for Azure
+openai.api_base = "https://api.openai.com/v1"
+
+# Initialize Langfuse
+langfuse = Langfuse()  # Make sure to set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY
 
 # Initialize session state for chat history if it doesn't exist
 if "messages" not in st.session_state:
@@ -36,7 +45,7 @@ Gather clear and concise information from the user by asking **only structured m
 - Always ask **one question at a time** with numbered multiple-choice options for clarity.
 - **Switch topics between questions** to keep the conversation engaging and gather a variety of information.
 - Keep the tone festive but avoid excessive filler or unnecessary commentary.
-- Do not go too deep into one topic, it should be a surprise! Just a simple Q and A.
+- Do not go too deep into one topic (only 2-3 questions), it should be a surprise! Just a simple Q and A.
 - You can ask some unrelated questions, to make it more mysterious.
 
 ### 4. Topics to Cover:
@@ -45,7 +54,7 @@ Ask about 5-7 of the following areas:
 - Small luxury or treat that always makes you happy.
 - Prefer practical gifts or something more fun and surprising.
 - Favorite way to relax or unwind.
-- Something you’ve always wanted but never got around to buying for yourself.
+- Something you've always wanted but never got around to buying for yourself.
 - Age group.
 - Gender.
 
@@ -79,12 +88,12 @@ Ask about 5-7 of the following areas:
 
 ---
 
-### **Elf’s Code of Conduct:**
+### **Elf's Code of Conduct:**
 1. **Strictly avoid open-ended questions**—each question must have clear numbered options.  
 2. **Do not suggest specific gifts.** Only Santa can do that.  
 3. **Focus on structured, concise questions** that help gather a variety of information.
 
-Santa is counting on you to stick to your role as a helper. If you stray from these rules, the gathered information won’t be usable!
+Santa is counting on you to stick to your role as a helper. If you stray from these rules, the gathered information won't be usable!
 """
 
 validation_prompt = """
@@ -93,8 +102,7 @@ Your task is to check if the latest response is appropriate given the ENTIRE con
 
 Requirements:
 - Must contain a clear question with numbered options (at least 2)
-- Must maintain a festive, elf-like tone
-- Questions should stay high-level and not dig too deep into specifics
+- Questions should stay high-level and not dig too deep into specifics (2-3 questions)
 - Questions should vary in topic and not fixate on one area
 - Questions should be general enough to maintain gift surprise
 - If a topic was already discussed, new questions should not dig deeper into it
@@ -107,7 +115,8 @@ When analyzing the conversation:
 
 Examples of BAD patterns:
 - First question: "What hobbies do you enjoy?"
-- Later question: "Which specific craft supplies do you prefer?" (TOO DEEP into hobbies)
+- Second question: "For this hobby, ..." (still ok)
+- Third question: "For this hobby, which specific craft supplies do you prefer?" (TOO SPECIFIC)
 - Multiple questions about the same topic area
 
 Examples of GOOD patterns:
@@ -151,95 +160,113 @@ Return ONLY the number (1, 2, or 3) of the best response, followed by a brief re
 Example: "2 - Best balance of distinct options and new topic area"
 """
 
+@observe()
+def generate_candidates(messages):
+    """Generate multiple candidate responses"""
+    response = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": prompt},
+            *messages
+        ],
+        temperature=0.1,
+        max_tokens=1000,
+        n=3
+    )
+    return [choice.message.content for choice in response.choices]
+
+@observe()
+def pick_best_response(messages, candidates):
+    """Pick the best response from candidates"""
+    picker_messages = [
+        {"role": "system", "content": picker_prompt},
+        {"role": "user", "content": "Here is the conversation history:"}
+    ]
+    
+    for msg in messages:
+        if msg["role"] == "assistant":
+            picker_messages.append({"role": "user", "content": f"Previous elf question: {msg['content']}"})
+        elif msg["role"] == "user":
+            picker_messages.append({"role": "user", "content": f"User answer: {msg['content']}"})
+    
+    picker_messages.append({"role": "user", "content": "Here are the candidate responses to choose from:"})
+    for i, candidate in enumerate(candidates, 1):
+        picker_messages.append({"role": "user", "content": f"Response {i}: {candidate}"})
+    
+    response = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=picker_messages,
+        temperature=0.0,
+        max_tokens=1000
+    )
+    picker_result = response.choices[0].message.content
+    chosen_index = int(picker_result.split()[0]) - 1
+    return candidates[chosen_index], picker_result
+
+@observe()
+def validate_response(messages, response_to_validate):
+    """Validate the chosen response"""
+    validation_messages = [
+        {"role": "system", "content": validation_prompt},
+        {"role": "user", "content": "Here is the conversation history and latest response to validate:"}
+    ]
+    
+    for msg in messages:
+        if msg["role"] == "assistant":
+            validation_messages.append({"role": "user", "content": f"Previous elf question: {msg['content']}"})
+        elif msg["role"] == "user":
+            validation_messages.append({"role": "user", "content": f"User answer: {msg['content']}"})
+    
+    validation_messages.append({"role": "user", "content": f"Latest elf response to validate: {response_to_validate}"})
+    
+    validation = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=validation_messages,
+        temperature=0.0,
+        max_tokens=1000
+    )
+    return validation.choices[0].message.content
+
+@observe()
+def refine_response(messages, chosen_response, validation_result):
+    """Refine the response if validation failed"""
+    refined = openai.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": prompt + "\n" + refinement_prompt},
+            *messages,
+            {"role": "assistant", "content": chosen_response},
+            {"role": "system", "content": f"Please fix your response. {validation_result}"}
+        ],
+        temperature=0.0,
+        max_tokens=1000
+    )
+    return refined.choices[0].message.content
+
+@observe()
 def get_ai_response(messages):
     """Get response from OpenAI API with multiple candidates and selection"""
     try:
-        # Generate 3 candidate responses in a single call
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": prompt},
-                *messages
-            ],
-            temperature=0.3,
-            max_tokens=1000,
-            n=3
-        )
-        candidates = [choice.message.content for choice in response.choices]
-        logging.info(f"Generated {len(candidates)} candidate responses")    
+        # Generate candidates
+        candidates = generate_candidates(messages)
         for i, candidate in enumerate(candidates, 1):
             logging.info(f"Candidate {i}:\n{candidate}")
         
-        # Prepare conversation history for picker
-        picker_messages = [
-            {"role": "system", "content": picker_prompt},
-            {"role": "user", "content": "Here is the conversation history:"}
-        ]
+        # Pick best response
+        chosen_response, picker_result = pick_best_response(messages, candidates)
+        logging.info(f"Picker result:\n{picker_result}")
         
-        # Add conversation history
-        for msg in messages:
-            if msg["role"] == "assistant":
-                picker_messages.append({"role": "user", "content": f"Previous elf question: {msg['content']}"})
-            elif msg["role"] == "user":
-                picker_messages.append({"role": "user", "content": f"User answer: {msg['content']}"})
+        # Validate response
+        validation_result = validate_response(messages, chosen_response)
+        logging.info(f"Validation result:\n{validation_result}")
         
-        # Add candidate responses
-        picker_messages.append({"role": "user", "content": "Here are the candidate responses to choose from:"})
-        for i, candidate in enumerate(candidates, 1):
-            picker_messages.append({"role": "user", "content": f"Response {i}: {candidate}"})
-        
-        # Get picker's choice
-        picker_response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=picker_messages,
-            temperature=0.0,
-            max_tokens=1000,
-        )
-        picker_result = picker_response.choices[0].message.content
-        chosen_index = int(picker_result.split()[0]) - 1
-        chosen_response = candidates[chosen_index]
-        logging.info(f"Picker chose response {chosen_index + 1}: {picker_result}")
-
-        # Validate the chosen response
-        validation_messages = [
-            {"role": "system", "content": validation_prompt},
-            {"role": "user", "content": "Here is the conversation history and latest response to validate:"}
-        ]
-        
-        # Add conversation history for validation
-        for msg in messages:
-            if msg["role"] == "assistant":
-                validation_messages.append({"role": "user", "content": f"Previous elf question: {msg['content']}"})
-            elif msg["role"] == "user":
-                validation_messages.append({"role": "user", "content": f"User answer: {msg['content']}"})
-        
-        validation_messages.append({"role": "user", "content": f"Latest elf response to validate: {chosen_response}"})
-        
-        validation = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=validation_messages,
-            temperature=0.0,
-            max_tokens=1000,
-        )
-        validation_result = validation.choices[0].message.content
-
         if validation_result == "VALID":
             return chosen_response
         else:
-            # Get refined response from the elf
-            refined = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": prompt + "\n" + refinement_prompt},
-                    *messages,
-                    {"role": "assistant", "content": chosen_response},
-                    {"role": "system", "content": f"Please fix your response. {validation_result}"}
-                ],
-                temperature=0.0,
-                max_tokens=1000,
-            )
-            logging.info(f"Response refined due to: {validation_result}")
-            return refined.choices[0].message.content
+            # Refine response
+            refined_response = refine_response(messages, chosen_response, validation_result)
+            logging.info(f"Refined response:\n{refined_response}")
+            return refined_response
 
     except Exception as e:
         st.error(f"Error getting response from OpenAI: {str(e)}")
