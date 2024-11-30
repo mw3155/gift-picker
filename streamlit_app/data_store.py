@@ -134,3 +134,25 @@ def send_completion_notification(email: str, result_link: str) -> None:
     # For now, just log that we would send an email
     logging.info(f"Would send completion notification to {email} for result {result_link}")
     pass
+
+def get_chat_data(chat_id):
+    """
+    Retrieve chat metadata from storage
+    
+    Args:
+        chat_id (str): The unique identifier for the chat
+        
+    Returns:
+        dict: Chat metadata including budget and email, or None if not found
+    """
+    try:
+        if chat_id in data_store:
+            return {
+                'budget': data_store[chat_id].get('budget'),
+                'notification_email': data_store[chat_id].get('notification_email'),
+                'status': data_store[chat_id].get('status', 'pending')
+            }
+        return None
+    except Exception as e:
+        logging.error(f"Error retrieving chat data: {e}")
+        return None

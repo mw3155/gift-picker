@@ -3,7 +3,7 @@ import streamlit as st
 import openai  # Change to direct import
 import os
 from datetime import datetime
-from data_store import generate_chat_link, save_chat_and_generate_result_link, get_gift_suggestions, is_valid_email
+from data_store import generate_chat_link, save_chat_and_generate_result_link, get_gift_suggestions, is_valid_email, get_chat_data
 
 # Configure base URL
 BASE_URL = os.getenv("BASE_URL", "https://gift-picker.streamlit.app")
@@ -44,6 +44,20 @@ if "messages" not in st.session_state:
 # Add this after initializing session_state.messages
 if "santa_submissions" not in st.session_state:
     st.session_state.santa_submissions = []
+
+# Add at the start of the app
+if "session_start" not in st.session_state:
+    st.session_state.session_start = datetime.now()
+    st.session_state.messages = []
+    st.session_state.santa_submissions = []
+
+# Add session timeout check
+def check_session_timeout():
+    if "session_start" in st.session_state:
+        session_duration = datetime.now() - st.session_state.session_start
+        if session_duration.total_seconds() > 3600:  # 1 hour timeout
+            st.session_state.clear()
+            st.rerun()
 
 prompt = """
 You are one of Santa's trusted elves. 
@@ -189,26 +203,39 @@ You **must** ask about these 7 topics:
 Santa is counting on you to stick to your role as a helper. If you stray from these rules, the gathered information won't be usable!
 """
 
-# Modify the generate_response function
-def generate_response(messages):
+# Modify the generate_response function to include budget
+def generate_response(messages, budget=None):
     """Generate a single response from the elf assistant"""
     # If Langfuse is available, wrap this function
     if observe:
-        return _generate_response_with_observability(messages)
-    return _generate_response_impl(messages)
+        return _generate_response_with_observability(messages, budget)
+    return _generate_response_impl(messages, budget)
 
 # Split the implementation
 @observe() if observe else lambda: None  # This makes the decorator optional
-def _generate_response_with_observability(messages):
-    return _generate_response_impl(messages)
+def _generate_response_with_observability(messages, budget):
+    return _generate_response_impl(messages, budget)
 
-def _generate_response_impl(messages):
+def _generate_response_impl(messages, budget):
     """Implementation of response generation"""
+    # Add budget to system prompt if available
+    system_messages = [{"role": "system", "content": prompt}]
+    if budget:
+        budget_prompt = f"""
+        IMPORTANT: The gift budget is {budget}. 
+        - Ensure all questions consider this budget range
+        - Adjust options to be appropriate for this price range
+        - Focus on value-oriented questions for lower budgets
+        - Consider luxury preferences for higher budgets
+        """
+        system_messages.append({"role": "system", "content": budget_prompt})
+    
+    system_messages.append({"role": "system", "content": "Remember to structure your response with all XML tags: <covered_questions>, <remaining_questions>, <thinking>, <question>, and <multiple-choice-options>. This is crucial for tracking conversation progress."})
+
     response = openai.chat.completions.create(
-        model="gpt-4o",
+        model="gpt-4",
         messages=[
-            {"role": "system", "content": prompt},
-            {"role": "system", "content": "Remember to structure your response with all XML tags: <covered_questions>, <remaining_questions>, <thinking>, <question>, and <multiple-choice-options>. This is crucial for tracking conversation progress."},
+            *system_messages,
             *messages
         ],
         temperature=0.3,
@@ -236,23 +263,29 @@ def _generate_response_impl(messages):
         return content
 
 # Modify get_ai_response similarly
-def get_ai_response(messages):
+def get_ai_response(messages, budget=None):
     """Get a single response from the OpenAI API"""
     if observe:
-        return _get_ai_response_with_observability(messages)
-    return _get_ai_response_impl(messages)
+        return _get_ai_response_with_observability(messages, budget)
+    return _get_ai_response_impl(messages, budget)
 
 @observe() if observe else lambda: None
-def _get_ai_response_with_observability(messages):
-    return _get_ai_response_impl(messages)
+def _get_ai_response_with_observability(messages, budget):
+    return _get_ai_response_impl(messages, budget)
 
-def _get_ai_response_impl(messages):
+def _get_ai_response_impl(messages, budget):
     try:
-        return generate_response(messages)
+        return generate_response(messages, budget)
+    except openai.APIError as e:
+        logging.error(f"OpenAI API error: {e}")
+        st.error("Service temporarily unavailable. Please try again later.")
+    except openai.RateLimitError:
+        logging.error("Rate limit exceeded")
+        st.error("Too many requests. Please wait a moment and try again.")
     except Exception as e:
-        st.error("Oh candy canes! 🎄 Something went wrong in Santa's workshop. Could you try that again, please? *jingles bells hopefully* 🔔")
         logging.error(f"Error generating AI response: {e}")
-        return None
+        st.error("Oh candy canes! Something went wrong. Please try again!")
+    return None
 
 # Get URL parameters
 chat_link = st.query_params.get("chat", None)
@@ -332,10 +365,14 @@ elif chat_link:
     **Note:** You can send your answers to Santa at any time by clicking the "Finished! Send to Santa 🎅" button.
     """)
 
+    # Get budget from the chat link data
+    chat_data = get_chat_data(chat_link)
+    budget = chat_data.get('budget') if chat_data else None
+
     # Initialize chat with AI's first message if chat is empty
     if len(st.session_state.messages) == 0:
         logging.info("Generating initial AI message...")
-        initial_response = get_ai_response([])
+        initial_response = get_ai_response([], budget)
         if initial_response:
             initial_message = {
                 "role": "assistant", 
@@ -366,7 +403,7 @@ elif chat_link:
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             logging.info("Requesting AI response...")
-            ai_response = get_ai_response(st.session_state.messages)
+            ai_response = get_ai_response(st.session_state.messages, budget)
             
             if ai_response:
                 message_placeholder.markdown(ai_response)
@@ -451,7 +488,7 @@ else:
             # Display both clickable link and copyable code
             st.markdown(f"**Click here to open:** [Magic Link 🎄]({full_url})")
             st.code(full_url, language=None)
-            st.info("""
+            st.info(f"""
             Share this link with the person you want to buy a gift for! 🎁
             
             We'll notify you at {email} when they complete the questionnaire.
