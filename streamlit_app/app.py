@@ -27,8 +27,6 @@ langfuse = Langfuse()  # Make sure to set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRE
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-closing_words = "Ho ho ho! That's all I need to know!"
-
 prompt = """
 You are one of Santa's trusted elves. 
 Your task is to gather information about the user's preferences to help Santa choose the perfect gift. 
@@ -39,7 +37,7 @@ Gather clear and concise information from the user by asking **only structured m
 Strategy: 
 First ask one question for each of the 7 topics. 
 Then go deeper into one topic, asking 2-3 questions about it.
-Then wrap it up with the words "{closing_words}" and a cheerful message like "I'll hurry back to the North Pole and share everything with Santa! *jingles bells excitedly* 🔔❄️ Have a magical day! 🎄"
+Then wrap it up with a cheerful message like "I'll hurry back to the North Pole and share everything with Santa! *jingles bells excitedly* 🔔❄️ Have a magical day! 🎄"
 
 ### 2. Elf's Role and Restrictions:
 - **You cannot suggest gifts or examples of gifts.** Only Santa can decide what the gift will be. Your role is purely information gathering.
@@ -67,7 +65,7 @@ Ask about these 7 topics:
 ### 5. Formatting Rules:
 - Every question must include **only numbered multiple-choice options.** No open-ended or vague follow-ups are allowed.
 - Keep responses clear and concise. Avoid adding unnecessary comments or speculations.
-- After asking all questions, wrap it up with the words "{closing_words}" and a cheerful message like "I'll hurry back to the North Pole and share everything with Santa! *jingles bells excitedly* 🔔❄️ Have a magical day! 🎄"
+- After asking all questions, wrap it up with a cheerful message like "I'll hurry back to the North Pole and share everything with Santa! *jingles bells excitedly* 🔔❄️ Have a magical day! 🎄"
 
 ### 6. Examples:
 #### Correct:
@@ -100,41 +98,6 @@ Ask about these 7 topics:
 3. **Focus on structured, concise questions** that help gather a variety of information.
 
 Santa is counting on you to stick to your role as a helper. If you stray from these rules, the gathered information won't be usable!
-"""
-
-validation_prompt = """
-You are a validator that checks if a response contains proper multiple choice questions and maintains appropriate question depth.
-Your task is to check if the latest response is appropriate given the ENTIRE conversation history.
-
-Requirements:
-- Must contain a clear question with numbered options (at least 2)
-- Questions should be general enough to maintain gift surprise
-- Max 3 questions per topic
-
-Examples of BAD patterns:
-- Too specific question: "For this hobby, which specific craft supplies do you prefer?"
-- Too many questions about the same topic: Q1: "What hobbies do you enjoy?" Q2: "Which genre of books do you prefer?" Q3: "What's your favorite book in that genre?" (Q1 and Q2 are ok, but Q3 is too specific)
-
-Examples of GOOD patterns:
-- First question: "What activities make you smile?"
-- Later question: "How do you prefer to relax?" (DIFFERENT topic)
-- Questions that explore various aspects of preferences
-
-Return ONLY one of these:
-- "VALID" if the response meets all requirements
-- "INVALID because [specific reason]" if it doesn't meet requirements (e.g., "INVALID because this is the fourth question about hobbies")
-
-Do not suggest fixes or provide new text. Only validate and explain if invalid.
-Do not be too strict, give some leeway.
-"""
-
-refinement_prompt = """
-You are still the same cheerful elf, but you need to regenerate your previous response based on the feedback.
-Keep your magical and festive tone.
-The previous failure is not visible to the user.
-So do not apologize or anything else, just generate a new response.
-Continue with the conversation as if nothing went wrong.
-Don't forget to cover all topics (especially gender, age group, and hobbies).
 """
 
 picker_prompt = """
@@ -204,46 +167,6 @@ def pick_best_response(messages, candidates):
     return candidates[chosen_index], picker_result
 
 @observe()
-def validate_response(messages, response_to_validate):
-    """Validate the chosen response"""
-    validation_messages = [
-        {"role": "system", "content": validation_prompt},
-        {"role": "user", "content": "Here is the conversation history and latest response to validate:"}
-    ]
-    
-    for msg in messages:
-        if msg["role"] == "assistant":
-            validation_messages.append({"role": "user", "content": f"Previous elf question: {msg['content']}"})
-        elif msg["role"] == "user":
-            validation_messages.append({"role": "user", "content": f"User answer: {msg['content']}"})
-    
-    validation_messages.append({"role": "user", "content": f"Latest elf response to validate: {response_to_validate}"})
-    
-    validation = openai.chat.completions.create(
-        model="gpt-4o",
-        messages=validation_messages,
-        temperature=0.0,
-        max_tokens=1000
-    )
-    return validation.choices[0].message.content
-
-@observe()
-def refine_response(messages, chosen_response, validation_result):
-    """Refine the response if validation failed"""
-    refined = openai.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": prompt + "\n" + refinement_prompt},
-            *messages,
-            {"role": "assistant", "content": chosen_response},
-            {"role": "system", "content": f"Please fix your response. {validation_result}"}
-        ],
-        temperature=0.0,
-        max_tokens=1000
-    )
-    return refined.choices[0].message.content
-
-@observe()
 def get_ai_response(messages):
     """Get response from OpenAI API with multiple candidates and selection"""
     candidates = []
@@ -253,33 +176,17 @@ def get_ai_response(messages):
         candidates = generate_candidates(messages)
         for i, candidate in enumerate(candidates, 1):
             logging.info(f"Candidate {i}:\n{candidate}")
-
-        # check if we have closing words in the response
-        if closing_words in candidates[0]:
-            return candidates[0]
         
         # Pick best response
         chosen_response, picker_result = pick_best_response(messages, candidates)
         logging.info(f"Picker result:\n{picker_result}")
         
-        # Validate response
-        validation_result = validate_response(messages, chosen_response)
-        logging.info(f"Validation result:\n{validation_result}")
-        
-        if validation_result == "VALID":
-            return chosen_response
-        else:
-            # Refine response
-            refined_response = refine_response(messages, chosen_response, validation_result)
-            logging.info(f"Refined response:\n{refined_response}")
-            return refined_response
+        return chosen_response
 
     except Exception as e:
         if chosen_response:
-            # case: validation failed, but we have a response from picker
             return chosen_response
         elif candidates:
-            # case: picker failed, but we have candidates from generation, just return the first one
             return candidates[0]
         else:
             st.error("Oh candy canes! 🎄 Something went wrong in Santa's workshop. Could you try that again, please? *jingles bells hopefully* 🔔")
@@ -346,12 +253,6 @@ if prompt := st.chat_input("Type your message here..."):
             st.session_state.messages.append({"role": "assistant", "content": ai_response})
         else:
             logging.error("Failed to get AI response")
-
-        # chat finished
-        if ai_response and closing_words in ai_response:
-            # TODO: send email to user with the gift ideas
-            # for now just print complete chat history to window
-            st.write(st.session_state.messages)
 
 # Add a clear chat button
 if st.button("Clear Chat"):
