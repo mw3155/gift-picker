@@ -6,6 +6,7 @@ from langfuse import Langfuse
 import os
 from datetime import datetime
 import json
+from data_store import generate_chat_link, save_chat_and_generate_result_link, get_gift_suggestions
 
 # Configure logging
 logging.basicConfig(
@@ -198,86 +199,142 @@ def get_ai_response(messages):
             st.error("Oh candy canes! 🎄 Something went wrong in Santa's workshop. Could you try that again, please? *jingles bells hopefully* 🔔")
         return None
 
-# Page config
-st.set_page_config(
-    page_title="Santa's Helper Elf",
-    page_icon="🎁",
-    layout="centered"
-)
+# Get base URL from environment variable or use default
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8501")
 
-# Title and description
-st.title("🎄 Santa's Helper Elf")
-st.markdown("""
-Ho ho ho! 🎅✨
+# Get URL parameters
+chat_link = st.query_params.get("chat", None)
 
-I'm one of Santa's special gift-finding elves, spreading holiday cheer from the North Pole! 
-
-Your friend has asked for my magical help to find you the perfect present. Let's work together to make their gift-giving wishes come true! *sprinkles candy cane dust* ✨🎁
-
-Just answer my festive questions, and I'll use my elf expertise to help guide them to something wonderful!
-
-**Note:** You can send your answers to Santa at any time by clicking the "Finished! Send to Santa 🎅" button.
-""")
-
-# Initialize chat with AI's first message if chat is empty
-if len(st.session_state.messages) == 0:
-    logging.info("Generating initial AI message...")
-    initial_response = get_ai_response([])
-    if initial_response:
-        initial_message = {
-            "role": "assistant", 
-            "content": initial_response
-        }
-        st.session_state.messages.append(initial_message)
-        logging.info(f"Initial AI message generated: {initial_response}")
-    else:
-        logging.error("Failed to generate initial AI message")
-
-# Display chat messages
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Chat input
-if prompt := st.chat_input("Type your message here..."):
-    logging.info(f"User input: {prompt}")
+if not chat_link:
+    # Default page - Link generation
+    st.title("🎄 Santa's Secret Gift Helper")
+    st.markdown("""
+    Ho ho ho! 🎅✨
     
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    Want to find the perfect gift for someone special? Let Santa's elves help!
     
-    # Display user message
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    1. Generate a special link below
+    2. Share it with the person you want to buy a gift for
+    3. They'll chat with one of Santa's elves about their preferences
+    4. You'll get gift suggestions based on their answers!
+    """)
     
-    # Get and display assistant response
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        logging.info("Requesting AI response...")
-        ai_response = get_ai_response(st.session_state.messages)
-        
-        if ai_response:
-            message_placeholder.markdown(ai_response)
-            # Add assistant response to chat history
-            st.session_state.messages.append({"role": "assistant", "content": ai_response})
+    if st.button("Generate Magic Link ✨"):
+        new_link = generate_chat_link()
+        full_url = f"{BASE_URL}?chat={new_link}"
+        st.code(full_url, language=None)
+        st.info("Share this link with the person you want to buy a gift for! 🎁")
+
+else:
+    # Chat page - existing chat functionality
+    # Page config
+    st.set_page_config(
+        page_title="Santa's Helper Elf",
+        page_icon="🎁",
+        layout="centered"
+    )
+
+    # Title and description
+    st.title("🎄 Santa's Helper Elf")
+    st.markdown("""
+    Ho ho ho! 🎅✨
+
+    I'm one of Santa's special gift-finding elves, spreading holiday cheer from the North Pole! 
+
+    Your friend has asked for my magical help to find you the perfect present. Let's work together to make their gift-giving wishes come true! *sprinkles candy cane dust* ✨🎁
+
+    Just answer my festive questions, and I'll use my elf expertise to help guide them to something wonderful!
+
+    **Note:** You can send your answers to Santa at any time by clicking the "Finished! Send to Santa 🎅" button.
+    """)
+
+    # Initialize chat with AI's first message if chat is empty
+    if len(st.session_state.messages) == 0:
+        logging.info("Generating initial AI message...")
+        initial_response = get_ai_response([])
+        if initial_response:
+            initial_message = {
+                "role": "assistant", 
+                "content": initial_response
+            }
+            st.session_state.messages.append(initial_message)
+            logging.info(f"Initial AI message generated: {initial_response}")
         else:
-            logging.error("Failed to get AI response")
+            logging.error("Failed to generate initial AI message")
 
-# Add a clear chat button
-if st.button("Finished! Send to Santa 🎅"):
-    if len(st.session_state.messages) > 0:
-        # Create submission record
-        submission = {
-            "timestamp": datetime.now().isoformat(),
-            "conversation": st.session_state.messages
-        }
+    # Display chat messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Chat input
+    if prompt := st.chat_input("Type your message here..."):
+        logging.info(f"User input: {prompt}")
         
-        # Save to session state
-        st.session_state.santa_submissions.append(submission)
+        # Add user message to chat history
+        st.session_state.messages.append({"role": "user", "content": prompt})
         
-        # Log the submission
-        logging.info(f"New submission to Santa: {json.dumps(submission, indent=2)}")
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
         
-        # Show success message
-        st.success("Ho ho ho! Your chat has been sent to Santa! 🎄✨")
+        # Get and display assistant response
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            logging.info("Requesting AI response...")
+            ai_response = get_ai_response(st.session_state.messages)
+            
+            if ai_response:
+                message_placeholder.markdown(ai_response)
+                # Add assistant response to chat history
+                st.session_state.messages.append({"role": "assistant", "content": ai_response})
+            else:
+                logging.error("Failed to get AI response")
+
+    # Modify the "Finished!" button handler
+    if st.button("Finished! Send to Santa 🎅"):
+        if len(st.session_state.messages) > 0:
+            # Create submission record
+            submission = {
+                "timestamp": datetime.now().isoformat(),
+                "conversation": st.session_state.messages
+            }
+            
+            # Save to data store and get result link
+            result_link = save_chat_and_generate_result_link(chat_link, st.session_state.messages)
+            
+            if result_link:
+                full_result_url = f"{BASE_URL}?result={result_link}"
+                st.success("Ho ho ho! Your chat has been sent to Santa! 🎄✨")
+                st.code(full_result_url, language=None)
+                st.info("Share this link with your friend to see Santa's gift suggestions! 🎁")
+            else:
+                st.error("Oh no! Something went wrong saving your chat. Please try again! 🎅")
+        else:
+            st.warning("There's nothing to send to Santa yet! Have a chat with the elf first! 🎅")
+
+# Add this after the chat_link check
+result_link = st.query_params.get("result", None)
+
+if result_link:
+    # Results page
+    st.title("🎁 Santa's Gift Suggestions")
+    suggestions = get_gift_suggestions(result_link)
+    
+    if suggestions:
+        st.markdown("""
+        Ho ho ho! 🎅✨
+        
+        Based on the chat with my helpful elf, here are some gift ideas for your special someone:
+        """)
+        
+        for suggestion in suggestions:
+            st.markdown(f"- {suggestion}")
+            
+        st.markdown("""
+        Remember, these are just suggestions! The best gifts often come from the heart. 🎄✨
+        
+        Happy gifting! 🎁
+        """)
     else:
-        st.warning("There's nothing to send to Santa yet! Have a chat with the elf first! 🎅")
+        st.error("Oh no! This gift suggestion link seems to be invalid. Please check with your friend for the correct link! 🎅")

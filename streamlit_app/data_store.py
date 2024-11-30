@@ -22,10 +22,16 @@ def get_gift_suggestions(link_b):
         return None
     return data_store[link_b]["gift_suggestions"]
 
-def generate_gift_ideas(responses):
-    # Simple hardcoded response for now
+def generate_gift_ideas(messages):
+    """Generate gift ideas based on chat messages"""
+    # Extract user responses
+    user_responses = [msg["content"] for msg in messages if msg["role"] == "user"]
+    
+    # For now, return simple suggestions based on the responses
+    # In a real implementation, you might want to use GPT to analyze the responses
+    # and generate more meaningful suggestions
     return [
-        f"A gift related to their hobby: {responses[0]}",
-        f"Something they always wanted: {responses[1]}",
-        f"A {responses[2]} gift."
+        "Based on their interests: A hobby-related gift",
+        "Something practical they mentioned wanting",
+        "A surprise gift that matches their preferences"
     ]
