@@ -41,7 +41,7 @@ Gather clear and concise information from the user by asking **only structured m
 
 ### 4. Topics to Cover:
 Ask about 5-7 of the following areas:
-- Favorite pastimes or entertainment.
+- Hobbies or activities you enjoy.
 - Small luxury or treat that always makes you happy.
 - Prefer practical gifts or something more fun and surprising.
 - Favorite way to relax or unwind.
@@ -87,31 +87,50 @@ Santa is counting on you to stick to your role as a helper. If you stray from th
 """
 
 validation_prompt = """
-You are a validator that checks if a response contains proper multiple choice questions.
-Your task is to ONLY check if the given response meets the requirements.
+You are a validator that checks if a response contains proper multiple choice questions and maintains appropriate question depth.
+Your task is to check if the latest response is appropriate given the ENTIRE conversation history.
 
 Requirements:
-- Must contain a clear question
-- Must have numbered options (at least 2 options)
-- Options must be clear and distinct
+- Must contain a clear question with numbered options (at least 2)
 - Must maintain a festive, elf-like tone
+- Questions should stay high-level and not dig too deep into specifics
+- Questions should vary in topic and not fixate on one area
+- Questions should be general enough to maintain gift surprise
+- If a topic was already discussed, new questions should not dig deeper into it
+
+When analyzing the conversation:
+1. Look at previous questions asked by the elf
+2. Check if the current question is exploring a topic that was already covered
+3. Ensure questions are moving across different topics
+4. Verify that follow-up questions aren't making previous topics more specific
+
+Examples of BAD patterns:
+- First question: "What hobbies do you enjoy?"
+- Later question: "Which specific craft supplies do you prefer?" (TOO DEEP into hobbies)
+- Multiple questions about the same topic area
+
+Examples of GOOD patterns:
+- First question: "What activities make you smile?"
+- Later question: "How do you prefer to relax?" (DIFFERENT topic)
+- Questions that explore various aspects of preferences
 
 Return ONLY one of these:
 - "VALID" if the response meets all requirements
-- "INVALID because [specific reason]" if it doesn't meet requirements
+- "INVALID because [specific reason]" if it doesn't meet requirements (e.g., "INVALID because this is the third question about hobbies")
 
 Do not suggest fixes or provide new text. Only validate and explain if invalid.
 """
 
 refinement_prompt = """
 You are still the same cheerful elf, but you need to fix your previous response based on the feedback.
-Keep your magical and festive tone while ensuring you provide proper multiple choice options.
+Keep your magical and festive tone.
 Make sure to maintain consistency with previous interactions while fixing the issue.
 Do not say sorry or anything else, just fix the response. The user will not see the previous failure.
 """
 
 def get_ai_response(messages):
     """Get response from OpenAI API with LLM-based multiple choice validation"""
+    logging.info(f"START of get_ai_response, len(messages): {len(messages)}")
     try:
         # Get initial response
         response = client.chat.completions.create(
@@ -120,20 +139,31 @@ def get_ai_response(messages):
                 {"role": "system", "content": prompt},
                 *messages
             ],
-            temperature=0.0,
+            temperature=0.1,
             max_tokens=1000,    
         )
         initial_response = response.choices[0].message.content
-        logging.info(f"Initial response: {initial_response}")   
 
-        # Validate response using LLM
+        # Validate response using LLM - now including message history
+        validation_messages = [
+            {"role": "system", "content": validation_prompt},
+            {"role": "user", "content": "Here is the conversation history and latest response to validate:"}
+        ]
+        
+        # Add conversation history
+        for msg in messages:
+            if msg["role"] == "assistant":
+                validation_messages.append({"role": "user", "content": f"Previous elf question: {msg['content']}"})
+            elif msg["role"] == "user":
+                validation_messages.append({"role": "user", "content": f"User answer: {msg['content']}"})
+        
+        # Add the latest response to validate
+        validation_messages.append({"role": "user", "content": f"Latest elf response to validate: {initial_response}"})
+        
         validation = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": validation_prompt},
-                {"role": "user", "content": initial_response}
-            ],
-            temperature=0.0,
+            messages=validation_messages,
+            temperature=0.1,
             max_tokens=1000,
         )
         validation_result = validation.choices[0].message.content
@@ -150,10 +180,10 @@ def get_ai_response(messages):
                     {"role": "assistant", "content": initial_response},
                     {"role": "system", "content": f"Please fix your response. {validation_result}"}
                 ],
-                temperature=0.0,
+                temperature=0.1,
                 max_tokens=1000,
             )
-            logging.info(f"Response refined due to: {validation_result}")
+            logging.info(f"Refined response: {refined.choices[0].message.content}") 
             return refined.choices[0].message.content
 
     except Exception as e:
@@ -214,7 +244,6 @@ if prompt := st.chat_input("Type your message here..."):
         message_placeholder = st.empty()
         logging.info("Requesting AI response...")
         response = get_ai_response(st.session_state.messages)
-        logging.info(f"AI response: {response}")
         
         if response:
             message_placeholder.markdown(response)
