@@ -177,41 +177,9 @@ You **must** ask about these 7 topics:
 Santa is counting on you to stick to your role as a helper. If you stray from these rules, the gathered information won't be usable!
 """
 
-picker_prompt = """
-You are a response picker that selects the best elf response from multiple candidates.
-Each candidate response will be formatted with XML tags (<thinking>, <question>, <multiple-choice-options>).
-
-Follow these reasoning steps:
-
-1. For each candidate response:
-   a) Evaluate the thinking process and analysis
-   b) Check the quality of multiple choice options
-   c) Assess the question's clarity and appeal
-   d) Consider conversation context
-
-2. Compare candidates:
-   - Note strengths and weaknesses
-   - Consider which will gather most useful information
-   - Check alignment with previous questions
-
-3. Make final selection based on:
-   - Thinking Quality (30%)
-   - Options Quality (30%)
-   - Question Clarity (30%)
-   - Conversation Flow (10%)
-
-Return your reasoning in this format:
-"[Selected number] - [Brief reason]
-Reasoning:
-- Thinking: [comment]
-- Options: [comment]
-- Question: [comment]
-- Flow: [comment]"
-"""
-
 @observe()
-def generate_candidates(messages):
-    """Generate multiple candidate responses with reasoning"""
+def generate_response(messages):  # Renamed from generate_candidates
+    """Generate a single response from the elf assistant"""
     response = openai.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -221,92 +189,38 @@ def generate_candidates(messages):
         ],
         temperature=0.3,
         max_tokens=1000,
-        n=3
+        n=1
     )
-    for i, choice in enumerate(response.choices, 1):
-        logging.info(f"Candidate {i}:\n{choice.message.content}")
-    # Extract question and multiple-choice-options from each response
-    cleaned_responses = []
-    for i, choice in enumerate(response.choices, 1):
-        content = choice.message.content
-        if "<question>" in content and "<multiple-choice-options>" in content:
-            # Split at the last occurrence of tags
-            parts = content.split("<question>")
-            question = parts[-1].split("</question>")[0].strip()
-            
-            options_parts = content.split("<multiple-choice-options>")
-            options_raw = options_parts[-1].split("</multiple-choice-options>")[0]
-            options_lines = options_raw.split('\n')
-            cleaned_options = '\n'.join(line.strip() for line in options_lines if line.strip())
-            cleaned_responses.append(f"{question}\n{cleaned_options}")
-        else:
-            logging.error(f"""
-            ⚠️ CRITICAL XML STRUCTURE ERROR in candidate {i} ⚠️
-            Missing required XML tags! Expected both <question> and <multiple-choice-options>
-            Found tags: {[tag for tag in ['<question>', '<multiple-choice-options>'] if tag in content]}
-            Full content: {content}
-            """)
-            cleaned_responses.append(content)
-        logging.info(f"Candidate {i} cleaned: {cleaned_responses[-1]}")
-    return cleaned_responses
-
-@observe()
-def pick_best_response(messages, candidates):
-    """Pick the best response from candidates with detailed reasoning"""
-    picker_messages = [
-        {"role": "system", "content": picker_prompt},
-    ]
-    if len(messages) > 0:
-        picker_messages.append({"role": "user", "content": "Here is the conversation history:"}) 
+    
+    content = response.choices[0].message.content
+    if "<question>" in content and "<multiple-choice-options>" in content:
+        # Split at the last occurrence of tags
+        parts = content.split("<question>")
+        question = parts[-1].split("</question>")[0].strip()
+        
+        options_parts = content.split("<multiple-choice-options>")
+        options_raw = options_parts[-1].split("</multiple-choice-options>")[0]
+        options_lines = options_raw.split('\n')
+        cleaned_options = '\n'.join(line.strip() for line in options_lines if line.strip())
+        return f"{question}\n{cleaned_options}"
     else:
-        picker_messages.append({"role": "user", "content": "This is the first question."})  
-    for msg in messages:
-        if msg["role"] == "assistant":
-            picker_messages.append({"role": "user", "content": f"Previous elf question: {msg['content']}"})
-        elif msg["role"] == "user":
-            picker_messages.append({"role": "user", "content": f"User answer: {msg['content']}"})
-    
-    picker_messages.append({"role": "user", "content": "Here are the candidate responses to choose from:"})
-    for i, candidate in enumerate(candidates, 1):
-        picker_messages.append({"role": "user", "content": f"Response {i}: {candidate}"})
-    
-    response = openai.chat.completions.create(
-        model="gpt-4o",
-        messages=picker_messages,
-        temperature=0.0,
-        max_tokens=1000
-    )
-    picker_result = response.choices[0].message.content
-    
-    # Extract the chosen index from the detailed reasoning
-    chosen_index = int(picker_result.split()[0]) - 1
-    
-    # Log the detailed reasoning but only return the chosen response
-    logging.info(f"Picker reasoning:\n{picker_result}")
-    
-    return candidates[chosen_index]  # Remove picker_result from return value
+        logging.error(f"""
+        ⚠️ CRITICAL XML STRUCTURE ERROR ⚠️
+        Missing required XML tags! Expected both <question> and <multiple-choice-options>
+        Found tags: {[tag for tag in ['<question>', '<multiple-choice-options>'] if tag in content]}
+        Full content: {content}
+        """)
+        return content
 
 @observe()
 def get_ai_response(messages):
-    """Get response from OpenAI API with multiple candidates and selection"""
-    candidates = []
-    chosen_response = ""
+    """Get a single response from the OpenAI API"""
     try:
-        # Generate candidates
-        candidates = generate_candidates(messages)
-        
-        # Pick best response
-        chosen_response = pick_best_response(messages, candidates)  # Remove picker_result
-        
-        return chosen_response
+        response = generate_response(messages)  # Updated function call
+        return response
 
     except Exception as e:
-        if chosen_response:
-            return chosen_response
-        elif candidates:
-            return candidates[0]
-        else:
-            st.error("Oh candy canes! 🎄 Something went wrong in Santa's workshop. Could you try that again, please? *jingles bells hopefully* 🔔")
+        st.error("Oh candy canes! 🎄 Something went wrong in Santa's workshop. Could you try that again, please? *jingles bells hopefully* 🔔")
         return None
 
 # Get base URL from environment variable or use default
