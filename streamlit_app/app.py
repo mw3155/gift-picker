@@ -5,6 +5,9 @@ import os
 from datetime import datetime
 from data_store import generate_chat_link, save_chat_and_generate_result_link, get_gift_suggestions
 
+# Configure base URL
+BASE_URL = os.getenv("BASE_URL", "https://gift-picker.streamlit.app")
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -250,9 +253,6 @@ def _get_ai_response_impl(messages):
         st.error("Oh candy canes! 🎄 Something went wrong in Santa's workshop. Could you try that again, please? *jingles bells hopefully* 🔔")
         logging.error(f"Error generating AI response: {e}")
         return None
-
-# Get base URL from environment variable or use default
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8501")
 
 # Get URL parameters
 chat_link = st.query_params.get("chat", None)
