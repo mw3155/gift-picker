@@ -47,6 +47,7 @@ Ask about 5-7 of the following areas:
 - Favorite way to relax or unwind.
 - Something you’ve always wanted but never got around to buying for yourself.
 - Age group.
+- Gender.
 
 ### 5. Formatting Rules:
 - Every question must include **only numbered multiple-choice options.** No open-ended or vague follow-ups are allowed.
@@ -128,48 +129,102 @@ Make sure to maintain consistency with previous interactions while fixing the is
 Do not say sorry or anything else, just fix the response. The user will not see the previous failure.
 """
 
+picker_prompt = """
+You are a response picker that selects the best elf response from multiple candidates.
+Analyze each response based on these criteria:
+
+1. Question Quality (Most Important):
+   - Clear multiple choice format
+   - Appropriate number of options (2-5)
+   - Options are distinct and meaningful
+   - Options cover a good range of possibilities
+
+2. Topic Selection (Also Important):
+   - Maintains good topic variety compared to previous questions
+   - Stays high-level without going too specific
+   - Appropriate for gift selection
+   - Doesn't overlap with previous topics
+   - Avoids follow-up questions on same topic
+
+Review the conversation history and the candidate responses.
+Return ONLY the number (1, 2, or 3) of the best response, followed by a brief reason.
+Example: "2 - Best balance of distinct options and new topic area"
+"""
+
 def get_ai_response(messages):
-    """Get response from OpenAI API with LLM-based multiple choice validation"""
-    logging.info(f"START of get_ai_response, len(messages): {len(messages)}")
+    """Get response from OpenAI API with multiple candidates and selection"""
     try:
-        # Get initial response
+        # Generate 3 candidate responses in a single call
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": prompt},
                 *messages
             ],
-            temperature=0.1,
-            max_tokens=1000,    
+            temperature=0.3,
+            max_tokens=1000,
+            n=3
         )
-        initial_response = response.choices[0].message.content
+        candidates = [choice.message.content for choice in response.choices]
+        logging.info(f"Generated {len(candidates)} candidate responses")    
+        for i, candidate in enumerate(candidates, 1):
+            logging.info(f"Candidate {i}:\n{candidate}")
+        
+        # Prepare conversation history for picker
+        picker_messages = [
+            {"role": "system", "content": picker_prompt},
+            {"role": "user", "content": "Here is the conversation history:"}
+        ]
+        
+        # Add conversation history
+        for msg in messages:
+            if msg["role"] == "assistant":
+                picker_messages.append({"role": "user", "content": f"Previous elf question: {msg['content']}"})
+            elif msg["role"] == "user":
+                picker_messages.append({"role": "user", "content": f"User answer: {msg['content']}"})
+        
+        # Add candidate responses
+        picker_messages.append({"role": "user", "content": "Here are the candidate responses to choose from:"})
+        for i, candidate in enumerate(candidates, 1):
+            picker_messages.append({"role": "user", "content": f"Response {i}: {candidate}"})
+        
+        # Get picker's choice
+        picker_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=picker_messages,
+            temperature=0.0,
+            max_tokens=1000,
+        )
+        picker_result = picker_response.choices[0].message.content
+        chosen_index = int(picker_result.split()[0]) - 1
+        chosen_response = candidates[chosen_index]
+        logging.info(f"Picker chose response {chosen_index + 1}: {picker_result}")
 
-        # Validate response using LLM - now including message history
+        # Validate the chosen response
         validation_messages = [
             {"role": "system", "content": validation_prompt},
             {"role": "user", "content": "Here is the conversation history and latest response to validate:"}
         ]
         
-        # Add conversation history
+        # Add conversation history for validation
         for msg in messages:
             if msg["role"] == "assistant":
                 validation_messages.append({"role": "user", "content": f"Previous elf question: {msg['content']}"})
             elif msg["role"] == "user":
                 validation_messages.append({"role": "user", "content": f"User answer: {msg['content']}"})
         
-        # Add the latest response to validate
-        validation_messages.append({"role": "user", "content": f"Latest elf response to validate: {initial_response}"})
+        validation_messages.append({"role": "user", "content": f"Latest elf response to validate: {chosen_response}"})
         
         validation = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=validation_messages,
-            temperature=0.1,
+            temperature=0.0,
             max_tokens=1000,
         )
         validation_result = validation.choices[0].message.content
-        logging.info(f"Validation result: {validation_result}")
+
         if validation_result == "VALID":
-            return initial_response
+            return chosen_response
         else:
             # Get refined response from the elf
             refined = client.chat.completions.create(
@@ -177,13 +232,13 @@ def get_ai_response(messages):
                 messages=[
                     {"role": "system", "content": prompt + "\n" + refinement_prompt},
                     *messages,
-                    {"role": "assistant", "content": initial_response},
+                    {"role": "assistant", "content": chosen_response},
                     {"role": "system", "content": f"Please fix your response. {validation_result}"}
                 ],
-                temperature=0.1,
+                temperature=0.0,
                 max_tokens=1000,
             )
-            logging.info(f"Refined response: {refined.choices[0].message.content}") 
+            logging.info(f"Response refined due to: {validation_result}")
             return refined.choices[0].message.content
 
     except Exception as e:
