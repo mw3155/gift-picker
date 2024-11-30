@@ -6,17 +6,17 @@ from data_store import (
 )
 
 # Routing logic
-query_params = st.experimental_get_query_params()
+query_params = st.query_params
 
 if "link_a" in query_params:
     # User2's Chat Page
-    link_a = query_params["link_a"][0]
+    link_a = query_params["link_a"]
     st.title("Answer a Few Questions")
     
     # Predefined questions
     questions = [
         "What is your favorite hobby?",
-        "What is something you’ve always wanted?",
+        "What is something you've always wanted?",
         "Do you prefer practical or sentimental gifts?",
     ]
     
@@ -37,7 +37,7 @@ if "link_a" in query_params:
 else:
     # Check if User1 is viewing suggestions
     if "link_b" in query_params:
-        link_b = query_params["link_b"][0]
+        link_b = query_params["link_b"]
         st.title("Gift Suggestions")
         suggestions = get_gift_suggestions(link_b)
         if suggestions:
