@@ -1,8 +1,6 @@
 import logging
 import streamlit as st
-from langfuse.decorators import observe
-from langfuse.openai import openai  # OpenAI integration
-from langfuse import Langfuse
+import openai  # Change to direct import
 import os
 from datetime import datetime
 from data_store import generate_chat_link, save_chat_and_generate_result_link, get_gift_suggestions
@@ -16,14 +14,25 @@ logging.basicConfig(
     ]
 )
 
-# Configure OpenAI
+# Add new function to handle optional Langfuse initialization
+def init_langfuse():
+    try:
+        from langfuse.decorators import observe
+        from langfuse import Langfuse
+        langfuse = Langfuse()
+        return observe, langfuse
+    except (ImportError, Exception) as e:
+        logging.warning(f"Langfuse initialization failed: {e}. Continuing without observability.")
+        return None, None
+
+# Initialize Langfuse (optional)
+observe, langfuse = init_langfuse()
+
+# Configure OpenAI (modify the OpenAI configuration)
 openai.api_key = os.getenv("OPENAI_API_KEY")
 openai.api_type = "openai"
 openai.api_version = None  # Only needed for Azure
 openai.api_base = "https://api.openai.com/v1"
-
-# Initialize Langfuse
-langfuse = Langfuse()  # Make sure to set LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY
 
 # Initialize session state for chat history if it doesn't exist
 if "messages" not in st.session_state:
@@ -177,9 +186,21 @@ You **must** ask about these 7 topics:
 Santa is counting on you to stick to your role as a helper. If you stray from these rules, the gathered information won't be usable!
 """
 
-@observe()
-def generate_response(messages):  # Renamed from generate_candidates
+# Modify the generate_response function
+def generate_response(messages):
     """Generate a single response from the elf assistant"""
+    # If Langfuse is available, wrap this function
+    if observe:
+        return _generate_response_with_observability(messages)
+    return _generate_response_impl(messages)
+
+# Split the implementation
+@observe() if observe else lambda: None  # This makes the decorator optional
+def _generate_response_with_observability(messages):
+    return _generate_response_impl(messages)
+
+def _generate_response_impl(messages):
+    """Implementation of response generation"""
     response = openai.chat.completions.create(
         model="gpt-4o",
         messages=[
@@ -194,7 +215,6 @@ def generate_response(messages):  # Renamed from generate_candidates
     
     content = response.choices[0].message.content
     if "<question>" in content and "<multiple-choice-options>" in content:
-        # Split at the last occurrence of tags
         parts = content.split("<question>")
         question = parts[-1].split("</question>")[0].strip()
         
@@ -212,15 +232,23 @@ def generate_response(messages):  # Renamed from generate_candidates
         """)
         return content
 
-@observe()
+# Modify get_ai_response similarly
 def get_ai_response(messages):
     """Get a single response from the OpenAI API"""
-    try:
-        response = generate_response(messages)  # Updated function call
-        return response
+    if observe:
+        return _get_ai_response_with_observability(messages)
+    return _get_ai_response_impl(messages)
 
+@observe() if observe else lambda: None
+def _get_ai_response_with_observability(messages):
+    return _get_ai_response_impl(messages)
+
+def _get_ai_response_impl(messages):
+    try:
+        return generate_response(messages)
     except Exception as e:
         st.error("Oh candy canes! 🎄 Something went wrong in Santa's workshop. Could you try that again, please? *jingles bells hopefully* 🔔")
+        logging.error(f"Error generating AI response: {e}")
         return None
 
 # Get base URL from environment variable or use default
