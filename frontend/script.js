@@ -49,7 +49,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (currentQuestion < questions.length) {
         questionEl.textContent = questions[currentQuestion];
       } else {
-        const link_a = "example-chat-link-id"; // Replace with logic to fetch from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const link_a = urlParams.get('id');
         try {
           const response = await fetch(`http://localhost:8000/complete-chat/${link_a}`, {
             method: "POST",
@@ -67,7 +68,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   if (currentPath === "result.html") {
-    const link_b = "example-result-link-id"; // Replace with logic to fetch from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const link_b = urlParams.get('id');
     fetch(`http://localhost:8000/get-suggestions/${link_b}`)
       .then((response) => response.json())
       .then((data) => {
