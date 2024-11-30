@@ -13,7 +13,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-url = "localhost:8000"
+frontend_url = "localhost:3000"
+backend_url = "localhost:8000"
 
 # In-memory storage for simplicity
 data_store = {}
@@ -22,7 +23,7 @@ data_store = {}
 def generate_chat_link():
     link_a = str(uuid.uuid4())
     data_store[link_a] = {"user2_responses": [], "result_link": None}
-    return {"link_a": f"https://{url}/chat/{link_a}"}
+    return {"link_a": f"https://{frontend_url}/chat/{link_a}"}
 
 @app.post("/complete-chat/{link_a}")
 def complete_chat(link_a: str, responses: dict):
@@ -35,7 +36,7 @@ def complete_chat(link_a: str, responses: dict):
     data_store[link_a]["result_link"] = link_b
     data_store[link_b] = {"gift_suggestions": generate_gift_ideas(responses)}
     
-    return {"link_b": f"https://{url}/result/{link_b}"}
+    return {"link_b": f"https://{frontend_url}/result/{link_b}"}
 
 @app.get("/get-suggestions/{link_b}")
 def get_suggestions(link_b: str):
