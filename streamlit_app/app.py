@@ -88,17 +88,26 @@ Santa is counting on you to stick to your role as a helper. If you stray from th
 
 validation_prompt = """
 You are a validator that checks if a response contains proper multiple choice questions.
-Your task is to:
-1. Check if the given response contains a properly formatted multiple choice question with numbered options
-2. If it doesn't, rewrite the response to include proper multiple choice options
+Your task is to ONLY check if the given response meets the requirements.
 
-Rules for validation:
-- Response must contain a question
-- Question must have numbered options (at least 2 options)
-- Options should be clear and distinct
+Requirements:
+- Must contain a clear question
+- Must have numbered options (at least 2 options)
+- Options must be clear and distinct
+- Must maintain a festive, elf-like tone
 
-Return ONLY "VALID" if the response is good.
-If the response needs fixing, return a corrected version that maintains the same intent but with proper multiple choice format.
+Return ONLY one of these:
+- "VALID" if the response meets all requirements
+- "INVALID because [specific reason]" if it doesn't meet requirements
+
+Do not suggest fixes or provide new text. Only validate and explain if invalid.
+"""
+
+refinement_prompt = """
+You are still the same cheerful elf, but you need to fix your previous response based on the feedback.
+Keep your magical and festive tone while ensuring you provide proper multiple choice options.
+Make sure to maintain consistency with previous interactions while fixing the issue.
+Do not say sorry or anything else, just fix the response. The user will not see the previous failure.
 """
 
 def get_ai_response(messages):
@@ -115,6 +124,7 @@ def get_ai_response(messages):
             max_tokens=1000,    
         )
         initial_response = response.choices[0].message.content
+        logging.info(f"Initial response: {initial_response}")   
 
         # Validate response using LLM
         validation = client.chat.completions.create(
@@ -127,13 +137,24 @@ def get_ai_response(messages):
             max_tokens=1000,
         )
         validation_result = validation.choices[0].message.content
-
+        logging.info(f"Validation result: {validation_result}")
         if validation_result == "VALID":
             return initial_response
         else:
-            # Use the corrected version from the validator
-            logging.info("Original response didn't have multiple choice, using corrected version")
-            return validation_result
+            # Get refined response from the elf
+            refined = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": prompt + "\n" + refinement_prompt},
+                    *messages,
+                    {"role": "assistant", "content": initial_response},
+                    {"role": "system", "content": f"Please fix your response. {validation_result}"}
+                ],
+                temperature=0.0,
+                max_tokens=1000,
+            )
+            logging.info(f"Response refined due to: {validation_result}")
+            return refined.choices[0].message.content
 
     except Exception as e:
         st.error(f"Error getting response from OpenAI: {str(e)}")
