@@ -45,7 +45,7 @@ Gather clear and concise information from the user by asking **only structured m
 - Always ask **one question at a time** with numbered multiple-choice options for clarity.
 - **Switch topics between questions** to keep the conversation engaging and gather a variety of information.
 - Keep the tone festive but avoid excessive filler or unnecessary commentary.
-- Do not go too deep into one topic (only 2-3 questions), it should be a surprise! Just a simple Q and A.
+- Do not go too deep into one topic (only 2-3 questions per topic), it should be a surprise! Just a simple Q and A.
 - You can ask some unrelated questions, to make it more mysterious.
 
 ### 4. Topics to Cover:
@@ -102,22 +102,14 @@ Your task is to check if the latest response is appropriate given the ENTIRE con
 
 Requirements:
 - Must contain a clear question with numbered options (at least 2)
-- Questions should stay high-level and not dig too deep into specifics (2-3 questions)
-- Questions should vary in topic and not fixate on one area
+- Questions should stay high-level and not dig too deep into specifics (no more than 3 questions per topic)
 - Questions should be general enough to maintain gift surprise
 - If a topic was already discussed, new questions should not dig deeper into it
-
-When analyzing the conversation:
-1. Look at previous questions asked by the elf
-2. Check if the current question is exploring a topic that was already covered
-3. Ensure questions are moving across different topics
-4. Verify that follow-up questions aren't making previous topics more specific
 
 Examples of BAD patterns:
 - First question: "What hobbies do you enjoy?"
 - Second question: "For this hobby, ..." (still ok)
 - Third question: "For this hobby, which specific craft supplies do you prefer?" (TOO SPECIFIC)
-- Multiple questions about the same topic area
 
 Examples of GOOD patterns:
 - First question: "What activities make you smile?"
@@ -126,9 +118,10 @@ Examples of GOOD patterns:
 
 Return ONLY one of these:
 - "VALID" if the response meets all requirements
-- "INVALID because [specific reason]" if it doesn't meet requirements (e.g., "INVALID because this is the third question about hobbies")
+- "INVALID because [specific reason]" if it doesn't meet requirements (e.g., "INVALID because this is the fourth question about hobbies")
 
 Do not suggest fixes or provide new text. Only validate and explain if invalid.
+Do not be too strict, give some leeway.
 """
 
 refinement_prompt = """
@@ -169,7 +162,7 @@ def generate_candidates(messages):
             {"role": "system", "content": prompt},
             *messages
         ],
-        temperature=0.1,
+        temperature=0.3,
         max_tokens=1000,
         n=3
     )
@@ -180,9 +173,11 @@ def pick_best_response(messages, candidates):
     """Pick the best response from candidates"""
     picker_messages = [
         {"role": "system", "content": picker_prompt},
-        {"role": "user", "content": "Here is the conversation history:"}
     ]
-    
+    if len(messages) > 0:
+        picker_messages.append({"role": "user", "content": "Here is the conversation history:"}) 
+    else:
+        picker_messages.append({"role": "user", "content": "This is the first question."})  
     for msg in messages:
         if msg["role"] == "assistant":
             picker_messages.append({"role": "user", "content": f"Previous elf question: {msg['content']}"})
