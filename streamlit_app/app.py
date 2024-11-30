@@ -169,11 +169,20 @@ def generate_candidates(messages):
             {"role": "system", "content": "Show your reasoning before providing the question. Format: 'Reasoning: [your thought process]\n\nQuestion: [your question]'"},
             *messages
         ],
-        temperature=0.7,
+        temperature=0.3,
         max_tokens=1000,
         n=3
     )
-    return [choice.message.content for choice in response.choices]
+    # Extract only the question part from each response
+    cleaned_responses = []
+    for choice in response.choices:
+        content = choice.message.content
+        if "Question:" in content:
+            question = content.split("Question:", 1)[1].strip()
+            cleaned_responses.append(question)
+        else:
+            cleaned_responses.append(content)
+    return cleaned_responses
 
 @observe()
 def pick_best_response(messages, candidates):
@@ -206,10 +215,10 @@ def pick_best_response(messages, candidates):
     # Extract the chosen index from the detailed reasoning
     chosen_index = int(picker_result.split()[0]) - 1
     
-    # Log the detailed reasoning
+    # Log the detailed reasoning but only return the chosen response
     logging.info(f"Picker reasoning:\n{picker_result}")
     
-    return candidates[chosen_index], picker_result
+    return candidates[chosen_index]  # Remove picker_result from return value
 
 @observe()
 def get_ai_response(messages):
@@ -223,8 +232,7 @@ def get_ai_response(messages):
             logging.info(f"Candidate {i}:\n{candidate}")
         
         # Pick best response
-        chosen_response, picker_result = pick_best_response(messages, candidates)
-        logging.info(f"Picker result:\n{picker_result}")
+        chosen_response = pick_best_response(messages, candidates)  # Remove picker_result
         
         return chosen_response
 
@@ -385,6 +393,11 @@ elif chat_link:
 
 else:
     # Default page - Link generation
+    st.set_page_config(
+        page_title="Santa's Secret Gift Helper",
+        page_icon="🎁",
+        layout="centered"
+    )
     st.title("🎄 Santa's Secret Gift Helper")
     st.markdown("""
     Ho ho ho! 🎅✨
