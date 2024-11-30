@@ -102,14 +102,12 @@ Your task is to check if the latest response is appropriate given the ENTIRE con
 
 Requirements:
 - Must contain a clear question with numbered options (at least 2)
-- Questions should stay high-level and not dig too deep into specifics (no more than 3 questions per topic)
 - Questions should be general enough to maintain gift surprise
-- If a topic was already discussed, new questions should not dig deeper into it
+- Max 3 questions per topic
 
 Examples of BAD patterns:
-- First question: "What hobbies do you enjoy?"
-- Second question: "For this hobby, ..." (still ok)
-- Third question: "For this hobby, which specific craft supplies do you prefer?" (TOO SPECIFIC)
+- Too specific question: "For this hobby, which specific craft supplies do you prefer?"
+- Too many questions about the same topic: Q1: "What hobbies do you enjoy?" Q2: "Which genre of books do you prefer?" Q3: "What's your favorite book in that genre?" (Q1 and Q2 are ok, but Q3 is too specific)
 
 Examples of GOOD patterns:
 - First question: "What activities make you smile?"
@@ -125,10 +123,11 @@ Do not be too strict, give some leeway.
 """
 
 refinement_prompt = """
-You are still the same cheerful elf, but you need to fix your previous response based on the feedback.
+You are still the same cheerful elf, but you need to regenerate your previous response based on the feedback.
 Keep your magical and festive tone.
-Make sure to maintain consistency with previous interactions while fixing the issue.
-Do not say sorry or anything else, just fix the response. The user will not see the previous failure.
+The previous failure is not visible to the user.
+So do not apologize or anything else, just generate a new response.
+Continue with the conversation as if nothing went wrong.
 """
 
 picker_prompt = """
@@ -157,7 +156,7 @@ Example: "2 - Best balance of distinct options and new topic area"
 def generate_candidates(messages):
     """Generate multiple candidate responses"""
     response = openai.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": prompt},
             *messages
@@ -189,7 +188,7 @@ def pick_best_response(messages, candidates):
         picker_messages.append({"role": "user", "content": f"Response {i}: {candidate}"})
     
     response = openai.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=picker_messages,
         temperature=0.0,
         max_tokens=1000
@@ -215,7 +214,7 @@ def validate_response(messages, response_to_validate):
     validation_messages.append({"role": "user", "content": f"Latest elf response to validate: {response_to_validate}"})
     
     validation = openai.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=validation_messages,
         temperature=0.0,
         max_tokens=1000
@@ -226,7 +225,7 @@ def validate_response(messages, response_to_validate):
 def refine_response(messages, chosen_response, validation_result):
     """Refine the response if validation failed"""
     refined = openai.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o",
         messages=[
             {"role": "system", "content": prompt + "\n" + refinement_prompt},
             *messages,
