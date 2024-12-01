@@ -19,7 +19,7 @@ data_store = {}
 # Add these environment variables
 GMAIL_USER = os.getenv("GMAIL_USER")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
-BASE_URL = os.getenv("BASE_URL", "https://gift-picker.streamlit.app")
+BASE_URL = os.getenv("BASE_URL", "https://chatwithsanta.streamlit.app")
 
 def is_valid_email(email: str) -> bool:
     """Validate email format using regex pattern"""

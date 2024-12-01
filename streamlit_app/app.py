@@ -6,7 +6,7 @@ from datetime import datetime
 from data_store import generate_chat_link, save_chat_and_generate_result_link, get_gift_suggestions, is_valid_email, get_chat_data
 
 # Configure base URL
-BASE_URL = os.getenv("BASE_URL", "https://gift-picker.streamlit.app")
+BASE_URL = os.getenv("BASE_URL", "https://chatwithsanta.streamlit.app")
 
 # Configure logging
 logging.basicConfig(
