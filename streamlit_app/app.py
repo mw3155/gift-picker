@@ -90,7 +90,7 @@ IMPORTANT:
 - Use only the five XML tags shown above
 - Simple markdown formatting is allowed (bold, italic, lists)
 - Do not use HTML or nested XML tags
-- Do not create any additional XML tags or sub-tags
+- Do not create any additional XML tags or sub-tags (e.g. do not generate <option> tags as sub-tags of <multiple_choice_options>)
 
 For example:
 <covered_questions>
@@ -233,7 +233,7 @@ def _generate_response_impl(messages, budget):
     system_messages.append({"role": "system", "content": "Remember to structure your response with all XML tags: <covered_questions>, <remaining_questions>, <thinking>, <question>, and <multiple_choice_options>. This is crucial for tracking conversation progress."})
 
     response = openai.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             *system_messages,
             *messages
