@@ -329,7 +329,7 @@ elif chat_link:
 
     Let's have a jolly chat so I can learn more about you and prepare something wonderful for Christmas! 
 
-    **Note:** You can finish our chat at any time by clicking the "Finished Chatting with Santa! 🎅" button.
+    **Note:** You can finish our chat at any time by clicking the "Enough chatting. Send to Gift Production! 🎅🎁" button.
     """)
 
     # Get budget from the chat link data
@@ -380,34 +380,42 @@ elif chat_link:
                 logging.error("Failed to get AI response")
 
     # Modify the "Finished!" button handler
-    if st.button("Finished Chatting with Santa! 🎅"):
-        if len(st.session_state.messages) > 0:
-            try:
-                logging.info("Attempting to save chat and generate result link...")
-                # Create submission record
-                submission = {
-                    "timestamp": datetime.now().isoformat(),
-                    "conversation": st.session_state.messages
-                }
-                
-                # Save to data store and get result link
-                logging.info(f"Saving chat for chat_link: {chat_link}")
-                result_link = save_chat_and_generate_result_link(chat_link, st.session_state.messages)
-                
-                if result_link:
-                    full_result_url = f"{BASE_URL}?result={result_link}"
-                    logging.info(f"Successfully generated result link: {result_link}")
-                    st.success("Ho ho ho! Your chat has been sent to Santa! 🎄✨")
-                    st.code(full_result_url, language=None)
-                    st.info("Share this link with your friend to see Santa's gift suggestions! 🎁")
-                else:
-                    logging.error("Failed to generate result link - returned None")
-                    st.error("Oh no! Something went wrong saving your chat. Please try again! 🎅")
-            except Exception as e:
-                logging.error(f"Error saving chat: {str(e)}", exc_info=True)
-                st.error(f"Oh no! Something went wrong saving your chat: {str(e)}")
-        else:
-            st.warning("There's nothing to send to Santa yet! Have a chat with the elf first! 🎅")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Enough chatting. Send to Gift Production! 🎅🎁"):
+            if len(st.session_state.messages) > 0:
+                try:
+                    logging.info("Attempting to save chat and generate result link...")
+                    # Create submission record
+                    submission = {
+                        "timestamp": datetime.now().isoformat(),
+                        "conversation": st.session_state.messages
+                    }
+                    
+                    # Save to data store and get result link
+                    logging.info(f"Saving chat for chat_link: {chat_link}")
+                    result_link = save_chat_and_generate_result_link(chat_link, st.session_state.messages)
+                    
+                    if result_link:
+                        full_result_url = f"{BASE_URL}?result={result_link}"
+                        logging.info(f"Successfully generated result link: {result_link}")
+                        st.success("Ho ho ho! Your chat has been sent to Santa! 🎄✨")
+                        st.code(full_result_url, language=None)
+                        st.info("Share this link with your friend to see Santa's gift suggestions! 🎁")
+                    else:
+                        logging.error("Failed to generate result link - returned None")
+                        st.error("Oh no! Something went wrong saving your chat. Please try again! 🎅")
+                except Exception as e:
+                    logging.error(f"Error saving chat: {str(e)}", exc_info=True)
+                    st.error(f"Oh no! Something went wrong saving your chat: {str(e)}")
+            else:
+                st.warning("There's nothing to send to Santa yet! Have a chat with the elf first! 🎅")
+
+    with col2:
+        if st.button("Restart Chat 🔄"):
+            st.session_state.messages = []
+            st.rerun()
 
 else:
     # Default page - Link generation
