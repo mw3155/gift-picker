@@ -4,6 +4,7 @@ import openai  # Change to direct import
 import os
 from datetime import datetime
 from data_store import generate_chat_link, save_chat_and_generate_result_link, get_gift_suggestions, is_valid_email, get_chat_data
+from streamlit_app.ai_operations import generate_santa_response, SANTA_PROMPT  # Add SANTA_PROMPT to import
 
 # Configure base URL
 BASE_URL = os.getenv("BASE_URL", "https://chatwithsanta.streamlit.app")
@@ -58,178 +59,17 @@ def check_session_timeout():
             st.session_state.clear()
             st.rerun()
 
-prompt = """
-You are Santa Claus himself, speaking directly with someone to learn about their interests and preferences.
-Your task is to gather information that will help you choose the perfect Christmas gift for them. 
-**You are strictly prohibited from suggesting gifts or asking open-ended questions.**
-
-Your response should be structured ONLY with these exact XML tags, using plain text or simple markdown inside each tag:
-
-<covered_questions>
-Write a list of covered topics and answers (markdown formatting allowed)
-</covered_questions>
-
-<remaining_questions>
-Write a list of remaining topics (markdown formatting allowed)
-</remaining_questions>
-
-<thinking>
-Write your analysis (markdown formatting allowed)
-</thinking>
-
-<question>
-Write a single warm, jolly question (markdown formatting allowed)
-</question>
-
-<multiple_choice_options>
-Write numbered options, one per line (markdown formatting allowed)
-</multiple_choice_options>
-
-IMPORTANT: 
-- Use only the five XML tags shown above
-- Simple markdown formatting is allowed (bold, italic, lists)
-- Do not use HTML or nested XML tags
-- Do not create any additional XML tags or sub-tags (e.g. do not generate <option> tags as sub-tags of <multiple_choice_options>)
-
-For example:
-<covered_questions>
-Age group: 26-40
-</covered_questions>
-
-<remaining_questions>
-Gender (mandatory)
-Hobbies or activities
-Small luxury or treat
-Gift preference (practical vs surprising)
-Favorite way to relax
-Something always wanted
-</remaining_questions>
-
-<thinking>
-Topics covered: age group
-Next topic needed: gender
-Options should be inclusive and respectful
-</thinking>
-
-<question>
-Ho ho ho! My dear friend, to help me prepare something special for Christmas, could you tell me your gender?
-</question>
-
-<multiple_choice_options>
-1. Male
-2. Female
-3. Non-binary
-4. Prefer not to say
-</multiple_choice_options>
-
-### 1. Objective:
-Gather clear and concise information from the user by asking **only structured multiple-choice questions.** You'll use this information to choose the perfect gift, but it must remain a Christmas surprise.
-
-### 2. Question Order:
-You MUST ask questions in this specific order:
-1. First question: Age group
-2. Second question: Gender
-3. Then proceed with the remaining topics in any order:
-   - Hobbies or activities you enjoy
-   - Small luxury or treat that always makes you happy
-   - Prefer practical gifts or something more fun and surprising
-   - Favorite way to relax or unwind
-   - Something you've always wanted but never got around to buying for yourself
-
-Strategy: 
-After age and gender, ask one question for each remaining topic.
-Then go deeper into one topic, asking 2-3 questions about it.
-Then wrap it up with a warm Christmas message.
-
-
-### 3. Santa's Role and Restrictions:
-- **You cannot suggest or hint at specific gifts.** The gift must be a Christmas surprise!
-- **You cannot ask open-ended questions.** Every question must have numbered multiple-choice options.
-- Keep your tone warm, jolly, and full of Christmas spirit.
-
-### 4. Behavior Guidelines:
-- Stay in character as Santa Claus, keeping responses jolly and warm.
-- Always ask **one question at a time** with numbered multiple-choice options.
-- **Switch topics between questions** to keep the conversation engaging.
-- Keep the Christmas spirit alive in your responses, but stay focused on gathering information.
-- After asking all questions, wrap it up with a warm message like "Thank you, my dear friend! I'll make sure to prepare something special for Christmas! Ho ho ho! 🎄"
-
-### 5. Topics to Cover:
-You **must** ask about these 7 topics:
-- Age group
-- Gender
-- Hobbies or activities you enjoy
-- Small luxury or treat that always makes you happy
-- Prefer practical gifts or something more fun and surprising
-- Favorite way to relax or unwind
-- Something you've always wanted but never got around to buying for yourself
-
-### 6. Formatting Rules:
-- Every question must include **only numbered multiple-choice options.** No open-ended or vague follow-ups are allowed.
-- Keep responses clear and concise, but maintain the warm, jolly Santa personality.
-- After asking all questions, wrap it up with a warm message like "Thank you, my dear friend! I'll make sure to prepare something special for Christmas! Ho ho ho! 🎄"
-- Use festive emojis sparingly (🎅🎄❄️)
-"""
-
 # Modify the generate_response function to include budget
 def generate_response(messages, budget=None):
     """Generate a single response from Santa Claus"""
     # If Langfuse is available, wrap this function
     if observe:
         return _generate_response_with_observability(messages, budget)
-    return _generate_response_impl(messages, budget)
+    return generate_santa_response(messages, budget)  # Just call the imported function directly
 
-# Split the implementation
 @observe() if observe else lambda: None  # This makes the decorator optional
 def _generate_response_with_observability(messages, budget):
-    return _generate_response_impl(messages, budget)
-
-def _generate_response_impl(messages, budget):
-    """Implementation of response generation"""
-    # Add budget to system prompt if available
-    system_messages = [{"role": "system", "content": prompt}]
-    if budget:
-        budget_prompt = f"""
-        IMPORTANT: The gift budget is {budget}. 
-        - Ensure all questions consider this budget range
-        - Adjust options to be appropriate for this price range
-        - Focus on value-oriented questions for lower budgets
-        - Consider luxury preferences for higher budgets
-        """
-        system_messages.append({"role": "system", "content": budget_prompt})
-    
-    system_messages.append({"role": "system", "content": "Remember to structure your response with all XML tags: <covered_questions>, <remaining_questions>, <thinking>, <question>, and <multiple_choice_options>. This is crucial for tracking conversation progress."})
-
-    response = openai.chat.completions.create(
-        # model="gpt-4o",
-        model="GS-GPT4o-global",
-        messages=[
-            *system_messages,
-            *messages
-        ],
-        temperature=0.3,
-        max_tokens=1000,
-        n=1
-    )
-    
-    content = response.choices[0].message.content
-    if "<question>" in content and "<multiple_choice_options>" in content:
-        parts = content.split("<question>")
-        question = parts[-1].split("</question>")[0].strip()
-        
-        options_parts = content.split("<multiple_choice_options>")
-        options_raw = options_parts[-1].split("</multiple_choice_options>")[0]
-        options_lines = options_raw.split('\n')
-        cleaned_options = '\n'.join(line.strip() for line in options_lines if line.strip())
-        return f"{question}\n{cleaned_options}"
-    else:
-        logging.error(f"""
-        ⚠️ CRITICAL XML STRUCTURE ERROR ⚠️
-        Missing required XML tags! Expected both <question> and <multiple_choice_options>
-        Found tags: {[tag for tag in ['<question>', '<multiple_choice_options>'] if tag in content]}
-        Full content: {content}
-        """)
-        return content
+    return generate_santa_response(messages, budget)
 
 # Modify get_ai_response similarly
 def get_ai_response(messages, budget=None):
@@ -243,8 +83,9 @@ def _get_ai_response_with_observability(messages, budget):
     return _get_ai_response_impl(messages, budget)
 
 def _get_ai_response_impl(messages, budget):
+    """Implementation of response generation"""
     try:
-        return generate_response(messages, budget)
+        return generate_santa_response(messages, budget)
     except openai.RateLimitError:
         logging.error("Rate limit exceeded")
         st.error("Too many requests. Please wait a moment and try again.")
@@ -281,6 +122,9 @@ if result_link:
         
         # Create a nice card-like display for each suggestion
         for suggestion in suggestions:
+            # Create Amazon search URL by encoding the suggestion text
+            amazon_search_url = f"https://www.amazon.com/s?k={'+'.join(suggestion.split())}"
+            
             st.markdown(f"""
             <div style='
                 background-color: #f0f8ff; 
@@ -294,6 +138,18 @@ if result_link:
                 line-height: 1.5;
             '>
                 {suggestion}
+                <br><br>
+                <a href="{amazon_search_url}" target="_blank" style="
+                    display: inline-block;
+                    padding: 8px 16px;
+                    background-color: #FF9900;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    font-size: 14px;
+                ">
+                    🔍 Search on Amazon
+                </a>
             </div>
             """, unsafe_allow_html=True)
             
