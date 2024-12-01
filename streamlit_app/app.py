@@ -82,9 +82,9 @@ Write your analysis (markdown formatting allowed)
 Write a single cheerful question (markdown formatting allowed)
 </question>
 
-<multiple-choice-options>
+<multiple_choice_options>
 Write numbered options, one per line (markdown formatting allowed)
-</multiple-choice-options>
+</multiple_choice_options>
 
 IMPORTANT: 
 - Use only the five XML tags shown above
@@ -116,12 +116,12 @@ Options should be inclusive and respectful
 Ho ho ho! To help Santa pick something just right, could you tell me your gender?
 </question>
 
-<multiple-choice-options>
+<multiple_choice_options>
 1. Male
 2. Female
 3. Non-binary
 4. Prefer not to say
-</multiple-choice-options>
+</multiple_choice_options>
 
 ### 1. Objective:
 Gather clear and concise information from the user by asking **only structured multiple-choice questions.** The information you collect will be reviewed by Santa, who will make the final decision about the gift.
@@ -230,7 +230,7 @@ def _generate_response_impl(messages, budget):
         """
         system_messages.append({"role": "system", "content": budget_prompt})
     
-    system_messages.append({"role": "system", "content": "Remember to structure your response with all XML tags: <covered_questions>, <remaining_questions>, <thinking>, <question>, and <multiple-choice-options>. This is crucial for tracking conversation progress."})
+    system_messages.append({"role": "system", "content": "Remember to structure your response with all XML tags: <covered_questions>, <remaining_questions>, <thinking>, <question>, and <multiple_choice_options>. This is crucial for tracking conversation progress."})
 
     response = openai.chat.completions.create(
         model="gpt-4",
@@ -244,20 +244,20 @@ def _generate_response_impl(messages, budget):
     )
     
     content = response.choices[0].message.content
-    if "<question>" in content and "<multiple-choice-options>" in content:
+    if "<question>" in content and "<multiple_choice_options>" in content:
         parts = content.split("<question>")
         question = parts[-1].split("</question>")[0].strip()
         
-        options_parts = content.split("<multiple-choice-options>")
-        options_raw = options_parts[-1].split("</multiple-choice-options>")[0]
+        options_parts = content.split("<multiple_choice_options>")
+        options_raw = options_parts[-1].split("</multiple_choice_options>")[0]
         options_lines = options_raw.split('\n')
         cleaned_options = '\n'.join(line.strip() for line in options_lines if line.strip())
         return f"{question}\n{cleaned_options}"
     else:
         logging.error(f"""
         ⚠️ CRITICAL XML STRUCTURE ERROR ⚠️
-        Missing required XML tags! Expected both <question> and <multiple-choice-options>
-        Found tags: {[tag for tag in ['<question>', '<multiple-choice-options>'] if tag in content]}
+        Missing required XML tags! Expected both <question> and <multiple_choice_options>
+        Found tags: {[tag for tag in ['<question>', '<multiple_choice_options>'] if tag in content]}
         Full content: {content}
         """)
         return content
