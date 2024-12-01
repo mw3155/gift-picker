@@ -315,7 +315,7 @@ elif chat_link:
     # Chat page - existing chat functionality
     # Page config
     st.set_page_config(
-        page_title="Santa's Helper Elf",
+        page_title="Chat with Santa",
         page_icon="🎁",
         layout="centered"
     )
@@ -420,11 +420,11 @@ elif chat_link:
 else:
     # Default page - Link generation
     st.set_page_config(
-        page_title="Santa's Secret Gift Helper",
+        page_title="Santa's Gift Helper",
         page_icon="🎁",
         layout="centered"
     )
-    st.title("🎄 Santa's Christmas Gift Helper")
+    st.title("🎄Santa's Gift Helper")
     st.markdown("""
     Ho ho ho! Merry Christmas! 🎅✨
     
