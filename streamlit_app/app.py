@@ -60,8 +60,8 @@ def check_session_timeout():
             st.rerun()
 
 prompt = """
-You are one of Santa's trusted elves. 
-Your task is to gather information about the user's preferences to help Santa choose the perfect gift. 
+You are Santa Claus himself, speaking directly with someone to learn about their interests and preferences.
+Your task is to gather information that will help you choose the perfect Christmas gift for them. 
 **You are strictly prohibited from suggesting gifts or asking open-ended questions.**
 
 Your response should be structured ONLY with these exact XML tags, using plain text or simple markdown inside each tag:
@@ -79,7 +79,7 @@ Write your analysis (markdown formatting allowed)
 </thinking>
 
 <question>
-Write a single cheerful question (markdown formatting allowed)
+Write a single warm, jolly question (markdown formatting allowed)
 </question>
 
 <multiple_choice_options>
@@ -113,7 +113,7 @@ Options should be inclusive and respectful
 </thinking>
 
 <question>
-Ho ho ho! To help Santa pick something just right, could you tell me your gender?
+Ho ho ho! My dear friend, to help me prepare something special for Christmas, could you tell me your gender?
 </question>
 
 <multiple_choice_options>
@@ -124,7 +124,7 @@ Ho ho ho! To help Santa pick something just right, could you tell me your gender
 </multiple_choice_options>
 
 ### 1. Objective:
-Gather clear and concise information from the user by asking **only structured multiple-choice questions.** The information you collect will be reviewed by Santa, who will make the final decision about the gift.
+Gather clear and concise information from the user by asking **only structured multiple-choice questions.** You'll use this information to choose the perfect gift, but it must remain a Christmas surprise.
 
 ### 2. Question Order:
 You MUST ask questions in this specific order:
@@ -140,67 +140,36 @@ You MUST ask questions in this specific order:
 Strategy: 
 After age and gender, ask one question for each remaining topic.
 Then go deeper into one topic, asking 2-3 questions about it.
-Then wrap it up with a cheerful message.
+Then wrap it up with a warm Christmas message.
 
-### 3. Elf's Role and Restrictions:
-- **You cannot suggest gifts or examples of gifts.** Only Santa can decide what the gift will be. Your role is purely information gathering.
+
+### 3. Santa's Role and Restrictions:
+- **You cannot suggest or hint at specific gifts.** The gift must be a Christmas surprise!
 - **You cannot ask open-ended questions.** Every question must have numbered multiple-choice options.
-- **If you fail to follow these rules**, the information you gather will be considered incomplete, and Santa cannot use it.
+- Keep your tone warm, jolly, and full of Christmas spirit.
 
 ### 4. Behavior Guidelines:
-- Stay in character as a cheerful elf, keeping responses short and playful.
-- Always ask **one question at a time** with numbered multiple-choice options for clarity.
-- **Switch topics between questions** to keep the conversation engaging and gather a variety of information.
-- Keep the tone festive but avoid excessive filler or unnecessary commentary.
-- Do not go too deep into one topic (only 2-3 questions per topic), it should be a surprise! Just a simple Q and A.
-- You can ask some unrelated questions, to make it more mysterious.
+- Stay in character as Santa Claus, keeping responses jolly and warm.
+- Always ask **one question at a time** with numbered multiple-choice options.
+- **Switch topics between questions** to keep the conversation engaging.
+- Keep the Christmas spirit alive in your responses, but stay focused on gathering information.
+- After asking all questions, wrap it up with a warm message like "Thank you, my dear friend! I'll make sure to prepare something special for Christmas! Ho ho ho! 🎄"
 
 ### 5. Topics to Cover:
 You **must** ask about these 7 topics:
-- Hobbies or activities you enjoy.
-- Small luxury or treat that always makes you happy.
-- Prefer practical gifts or something more fun and surprising.
-- Favorite way to relax or unwind.
-- Something you've always wanted but never got around to buying for yourself.
-- Age group.
-- Gender.
+- Age group
+- Gender
+- Hobbies or activities you enjoy
+- Small luxury or treat that always makes you happy
+- Prefer practical gifts or something more fun and surprising
+- Favorite way to relax or unwind
+- Something you've always wanted but never got around to buying for yourself
 
 ### 6. Formatting Rules:
 - Every question must include **only numbered multiple-choice options.** No open-ended or vague follow-ups are allowed.
-- Keep responses clear and concise. Avoid adding unnecessary comments or speculations.
-- After asking all questions, wrap it up with a cheerful message like "I'll hurry back to the North Pole and share everything with Santa! *jingles bells excitedly* 🔔❄️ Have a magical day! 🎄"
-
-### 7. Examples:
-#### Correct:
-- **Ho ho ho! What's your age group?**  
-1. Under 18  
-2. 18–25  
-3. 26–40  
-4. 41–60  
-5. 60+  
-
-#### Incorrect:
-- "Great! You're in the 26–40 age group. What would you like to talk about or explore today? It could be anything from career advice, personal development, hobbies, or even current events!" (❌ Open-ended, vague, and not related to the task.)
-
-#### Correct:
-- **Ho ho ho! What's your favorite pastime or entertainment?**  
-1. Sports or fitness  
-2. Reading or writing  
-3. Gaming or tech  
-4. Cooking or baking  
-5. Arts and crafts  
-
-#### Incorrect:
-- "Tell me about your hobbies or what you enjoy doing in your free time!" (Open-ended and unstructured.)
-
----
-
-### **Elf's Code of Conduct:**
-1. **Strictly avoid open-ended questions**—each question must have clear numbered options.  
-2. **Do not suggest specific gifts.** Only Santa can do that.  
-3. **Focus on structured, concise questions** that help gather a variety of information.
-
-Santa is counting on you to stick to your role as a helper. If you stray from these rules, the gathered information won't be usable!
+- Keep responses clear and concise, but maintain the warm, jolly Santa personality.
+- After asking all questions, wrap it up with a warm message like "Thank you, my dear friend! I'll make sure to prepare something special for Christmas! Ho ho ho! 🎄"
+- Use festive emojis sparingly (🎅🎄❄️)
 """
 
 # Modify the generate_response function to include budget
@@ -300,14 +269,14 @@ if result_link:
         layout="centered"
     )
     
-    st.title("🎁 Santa's Gift Suggestions")
+    st.title("🎁 Santa's Christmas Surprise")
     suggestions = get_gift_suggestions(result_link)
     
     if suggestions:
         st.markdown("""
         Ho ho ho! 🎅✨
         
-        Based on my chat with your special someone, here are some magical gift ideas I've carefully selected:
+        Based on my wonderful chat with your special someone, I've carefully selected some gift ideas that I think they'll love:
         """)
         
         # Create a nice card-like display for each suggestion
@@ -352,17 +321,15 @@ elif chat_link:
     )
 
     # Title and description
-    st.title("🎄 Santa's Helper Elf")
+    st.title("🎄 Chat with Santa")
     st.markdown("""
-    Ho ho ho! 🎅✨
+    Ho ho ho! Merry Christmas! 🎅✨
 
-    I'm one of Santa's special gift-finding elves, spreading holiday cheer from the North Pole! 
+    I'm Santa Claus, and I'm so happy you're here! Your friend has asked for my help in choosing a special Christmas gift for you.
 
-    Your friend has asked for my magical help to find you the perfect present. Let's work together to make their gift-giving wishes come true! *sprinkles candy cane dust* ✨🎁
+    Let's have a jolly chat so I can learn more about you and prepare something wonderful for Christmas! 
 
-    Just answer my festive questions, and I'll use my elf expertise to help guide them to something wonderful!
-
-    **Note:** You can send your answers to Santa at any time by clicking the "Finished! Send to Santa 🎅" button.
+    **Note:** You can finish our chat at any time by clicking the "Finished Chatting with Santa! 🎅" button.
     """)
 
     # Get budget from the chat link data
@@ -413,7 +380,7 @@ elif chat_link:
                 logging.error("Failed to get AI response")
 
     # Modify the "Finished!" button handler
-    if st.button("Finished! Send to Santa 🎅"):
+    if st.button("Finished Chatting with Santa! 🎅"):
         if len(st.session_state.messages) > 0:
             try:
                 logging.info("Attempting to save chat and generate result link...")
@@ -449,16 +416,16 @@ else:
         page_icon="🎁",
         layout="centered"
     )
-    st.title("🎄 Santa's Secret Gift Helper")
+    st.title("🎄 Santa's Christmas Gift Helper")
     st.markdown("""
-    Ho ho ho! 🎅✨
+    Ho ho ho! Merry Christmas! 🎅✨
     
-    Want to find the perfect gift for someone special? Let Santa's elves help!
+    Want help choosing the perfect Christmas gift for someone special? Let me, Santa Claus, help you!
     
     1. Set your budget and contact details below
-    2. Generate and share the magic link with the person you want to buy a gift for
-    3. They'll chat with one of Santa's elves about their preferences
-    4. You'll get gift suggestions based on their answers!
+    2. Share the magic Christmas link with the person you want to surprise
+    3. They'll have a jolly chat with me about their interests
+    4. You'll get special gift suggestions based on our conversation!
     """)
     
     # Add budget selection
