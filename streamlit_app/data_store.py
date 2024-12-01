@@ -7,7 +7,7 @@ import re
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from streamlit_app.ai_operations import generate_gift_suggestions  # Add this import
+from ai_operations import generate_gift_suggestions  # Add this import
 
 # In-memory storage
 data_store = {}

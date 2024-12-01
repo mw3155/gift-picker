@@ -4,7 +4,7 @@ import openai  # Change to direct import
 import os
 from datetime import datetime
 from data_store import generate_chat_link, save_chat_and_generate_result_link, get_gift_suggestions, is_valid_email, get_chat_data
-from streamlit_app.ai_operations import generate_santa_response, SANTA_PROMPT  # Add SANTA_PROMPT to import
+from ai_operations import generate_santa_response, SANTA_PROMPT  # Add SANTA_PROMPT to import
 
 # Configure base URL
 BASE_URL = os.getenv("BASE_URL", "https://chatwithsanta.streamlit.app")
