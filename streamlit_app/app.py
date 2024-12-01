@@ -122,8 +122,11 @@ if result_link:
         
         # Create a nice card-like display for each suggestion
         for suggestion in suggestions:
-            # Create Amazon search URL by encoding the suggestion text
-            amazon_search_url = f"https://www.amazon.com/s?k={'+'.join(suggestion.split())}"
+            # Create Amazon search URL using the suggestion text
+            suggestion_text = suggestion['text']  # Extract text from suggestion dictionary
+            keywords = suggestion['keywords']  # Get keywords for better search results
+            search_terms = keywords if keywords else suggestion_text
+            amazon_search_url = f"https://www.amazon.com/s?k={'+'.join(search_terms.split())}"
             
             st.markdown(f"""
             <div style='
@@ -137,7 +140,7 @@ if result_link:
                 font-size: 16px;
                 line-height: 1.5;
             '>
-                {suggestion}
+                {suggestion_text}
                 <br><br>
                 <a href="{amazon_search_url}" target="_blank" style="
                     display: inline-block;

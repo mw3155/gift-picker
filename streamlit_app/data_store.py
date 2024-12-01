@@ -83,6 +83,9 @@ def save_chat_and_generate_result_link(link_a, responses):
     # Get the budget from metadata for gift suggestions
     budget = data_store[link_a].get('budget')
     suggestions = generate_gift_suggestions(responses, budget)  # Using the imported function
+    if not suggestions:
+        return None
+
     data_store[link_b] = {
         "gift_suggestions": suggestions,
         "parent_chat": link_a

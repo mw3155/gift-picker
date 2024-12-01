@@ -73,18 +73,34 @@ def generate_gift_suggestions(messages: List[Dict], budget: Optional[str] = None
             max_tokens=1000
         )
         
-        suggestions = response.choices[0].message.content.split("\n")
-        # Filter out empty lines and ensure each suggestion starts with 🎁
-        return [s.strip() for s in suggestions if s.strip()]
+        content = response.choices[0].message.content
+        suggestions = []
+        
+        # Split content into individual suggestions
+        raw_suggestions = content.split("🎁")
+        for suggestion in raw_suggestions:
+            if not suggestion.strip():
+                continue
+                
+            # Extract suggestion and keywords
+            if "<keywords>" in suggestion and "</keywords>" in suggestion:
+                parts = suggestion.split("<keywords>")
+                suggestion_text = parts[0].strip()
+                keywords = parts[1].split("</keywords>")[0].strip()
+                suggestions.append({
+                    "text": f"🎁 {suggestion_text}",
+                    "keywords": keywords
+                })
+            else:
+                suggestions.append({
+                    "text": f"🎁 {suggestion.strip()}",
+                    "keywords": ""
+                })
+        return suggestions
         
     except Exception as e:
         logging.error(f"Error generating gift ideas: {e}")
-        # Fallback suggestions if API call fails
-        return [
-            "🎁 A hobby-related gift based on their interests",
-            "🎁 Something practical they mentioned wanting",
-            "🎁 A surprise gift that matches their preferences"
-        ]
+        return []
 
 def format_chat_summary(messages: List[Dict]) -> str:
     """Format chat history for GPT context"""
@@ -223,4 +239,12 @@ Guidelines:
 3. Keep suggestions within the specified budget range
 4. Keep the festive tone but be practical
 5. Format each suggestion on a new line starting with "🎁"
+6. For each suggestion, include relevant search keywords in <keywords> tags
+
+Example format:
+🎁 A premium yoga mat with carrying strap and alignment lines - Perfect for their daily meditation and yoga practice
+<keywords>premium yoga mat alignment lines</keywords>
+
+🎁 A gourmet coffee bean subscription box - They mentioned loving artisanal coffee as their daily luxury
+<keywords>gourmet coffee subscription box monthly</keywords>
 """ 
