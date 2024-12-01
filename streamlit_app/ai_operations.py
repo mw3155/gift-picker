@@ -3,10 +3,6 @@ import openai
 import logging
 from typing import Optional, List, Dict
 
-# Configure OpenAI if not already configured
-if not openai.api_key:
-    openai.api_key = os.getenv("OPENAI_API_KEY")
-
 def generate_santa_response(messages: List[Dict], budget: Optional[str] = None) -> Optional[str]:
     """Generate a single response from Santa Claus"""
     try:
