@@ -5,6 +5,9 @@ import os
 from typing import Optional
 from datetime import datetime
 import re
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # Configure OpenAI if not already configured
 if not openai.api_key:
@@ -12,6 +15,11 @@ if not openai.api_key:
 
 # In-memory storage
 data_store = {}
+
+# Add these environment variables
+GMAIL_USER = os.getenv("GMAIL_USER")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
+BASE_URL = os.getenv("BASE_URL", "https://gift-picker.streamlit.app")
 
 def is_valid_email(email: str) -> bool:
     """Validate email format using regex pattern"""
@@ -41,6 +49,30 @@ def generate_chat_link(budget: Optional[str] = None, email: Optional[str] = None
     
     return chat_id
 
+def send_email(recipient_email, subject, body):
+    """Send an email using Gmail SMTP"""
+    if not all([GMAIL_USER, GMAIL_APP_PASSWORD]):
+        logging.warning("Gmail credentials not configured. Skipping email send.")
+        return False
+    
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = GMAIL_USER
+        msg['To'] = recipient_email
+        msg['Subject'] = subject
+        
+        msg.attach(MIMEText(body, 'html'))
+        
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp_server:
+            smtp_server.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+            smtp_server.sendmail(GMAIL_USER, recipient_email, msg.as_string())
+            
+        logging.info(f"Email sent successfully to {recipient_email}")
+        return True
+    except Exception as e:
+        logging.error(f"Failed to send email: {e}")
+        return False
+
 def save_chat_and_generate_result_link(link_a, responses):
     if link_a not in data_store:
         return None
@@ -54,17 +86,32 @@ def save_chat_and_generate_result_link(link_a, responses):
     
     # Get the budget from metadata for gift suggestions
     budget = data_store[link_a].get('budget')
+    suggestions = generate_gift_ideas(responses, budget)
     data_store[link_b] = {
-        "gift_suggestions": generate_gift_ideas(responses, budget),
+        "gift_suggestions": suggestions,
         "parent_chat": link_a  # Store reference to original chat
     }
     
     # Send notification if email is available
-    if email := data_store[link_a].get('notification_email'):
-        try:
-            send_completion_notification(email, link_b)
-        except Exception as e:
-            logging.error(f"Failed to send notification email: {e}")
+    if notification_email := data_store[link_a].get('notification_email'):
+        full_result_url = f"{BASE_URL}?result={link_b}"
+        email_subject = "🎁 Your Gift Suggestions Are Ready!"
+        email_body = f"""
+        <html>
+        <body>
+        <h2>Ho ho ho! 🎅</h2>
+        <p>Great news! The person you're buying a gift for has finished chatting with Santa's helper elf.</p>
+        <p>Click the link below to see your personalized gift suggestions:</p>
+        <p><a href="{full_result_url}">View Gift Suggestions</a></p>
+        <p>Happy gifting! 🎄✨</p>
+        </body>
+        </html>
+        """
+        
+        if send_email(notification_email, email_subject, email_body):
+            logging.info(f"Notification email sent to {notification_email}")
+        else:
+            logging.error(f"Failed to send notification email to {notification_email}")
     
     return link_b
 
@@ -127,13 +174,6 @@ def generate_gift_ideas(messages, budget: Optional[str] = None):
             "🎁 Something practical they mentioned wanting",
             "🎁 A surprise gift that matches their preferences"
         ]
-
-def send_completion_notification(email: str, result_link: str) -> None:
-    """Send email notification when chat is completed"""
-    # TODO: Implement email sending functionality
-    # For now, just log that we would send an email
-    logging.info(f"Would send completion notification to {email} for result {result_link}")
-    pass
 
 def get_chat_data(chat_id):
     """
