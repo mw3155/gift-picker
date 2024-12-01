@@ -276,12 +276,12 @@ def _get_ai_response_with_observability(messages, budget):
 def _get_ai_response_impl(messages, budget):
     try:
         return generate_response(messages, budget)
-    except openai.APIError as e:
-        logging.error(f"OpenAI API error: {e}")
-        st.error("Service temporarily unavailable. Please try again later.")
     except openai.RateLimitError:
         logging.error("Rate limit exceeded")
         st.error("Too many requests. Please wait a moment and try again.")
+    except openai.APIError as e:
+        logging.error(f"OpenAI API error: {e}")
+        st.error("Service temporarily unavailable. Please try again later.")
     except Exception as e:
         logging.error(f"Error generating AI response: {e}")
         st.error("Oh candy canes! Something went wrong. Please try again!")
@@ -415,22 +415,30 @@ elif chat_link:
     # Modify the "Finished!" button handler
     if st.button("Finished! Send to Santa 🎅"):
         if len(st.session_state.messages) > 0:
-            # Create submission record
-            submission = {
-                "timestamp": datetime.now().isoformat(),
-                "conversation": st.session_state.messages
-            }
-            
-            # Save to data store and get result link
-            result_link = save_chat_and_generate_result_link(chat_link, st.session_state.messages)
-            
-            if result_link:
-                full_result_url = f"{BASE_URL}?result={result_link}"
-                st.success("Ho ho ho! Your chat has been sent to Santa! 🎄✨")
-                st.code(full_result_url, language=None)
-                st.info("Share this link with your friend to see Santa's gift suggestions! 🎁")
-            else:
-                st.error("Oh no! Something went wrong saving your chat. Please try again! 🎅")
+            try:
+                logging.info("Attempting to save chat and generate result link...")
+                # Create submission record
+                submission = {
+                    "timestamp": datetime.now().isoformat(),
+                    "conversation": st.session_state.messages
+                }
+                
+                # Save to data store and get result link
+                logging.info(f"Saving chat for chat_link: {chat_link}")
+                result_link = save_chat_and_generate_result_link(chat_link, st.session_state.messages)
+                
+                if result_link:
+                    full_result_url = f"{BASE_URL}?result={result_link}"
+                    logging.info(f"Successfully generated result link: {result_link}")
+                    st.success("Ho ho ho! Your chat has been sent to Santa! 🎄✨")
+                    st.code(full_result_url, language=None)
+                    st.info("Share this link with your friend to see Santa's gift suggestions! 🎁")
+                else:
+                    logging.error("Failed to generate result link - returned None")
+                    st.error("Oh no! Something went wrong saving your chat. Please try again! 🎅")
+            except Exception as e:
+                logging.error(f"Error saving chat: {str(e)}", exc_info=True)
+                st.error(f"Oh no! Something went wrong saving your chat: {str(e)}")
         else:
             st.warning("There's nothing to send to Santa yet! Have a chat with the elf first! 🎅")
 
