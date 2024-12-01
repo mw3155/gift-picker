@@ -32,10 +32,9 @@ def init_langfuse():
 observe, langfuse = init_langfuse()
 
 # Configure OpenAI (modify the OpenAI configuration)
-openai.api_key = os.getenv("OPENAI_API_KEY")
-openai.api_type = "openai"
-openai.api_version = None  # Only needed for Azure
-openai.api_base = "https://api.openai.com/v1"
+openai.api_key = os.getenv("AZURE_OPENAI_API_KEY")
+openai.api_type = "azure"
+openai.api_version = "2024-08-01-preview"
 
 # Initialize session state for chat history if it doesn't exist
 if "messages" not in st.session_state:
@@ -174,7 +173,7 @@ You **must** ask about these 7 topics:
 
 # Modify the generate_response function to include budget
 def generate_response(messages, budget=None):
-    """Generate a single response from the elf assistant"""
+    """Generate a single response from Santa Claus"""
     # If Langfuse is available, wrap this function
     if observe:
         return _generate_response_with_observability(messages, budget)
@@ -202,7 +201,8 @@ def _generate_response_impl(messages, budget):
     system_messages.append({"role": "system", "content": "Remember to structure your response with all XML tags: <covered_questions>, <remaining_questions>, <thinking>, <question>, and <multiple_choice_options>. This is crucial for tracking conversation progress."})
 
     response = openai.chat.completions.create(
-        model="gpt-4o",
+        # model="gpt-4o",
+        model="GS-GPT4o-global",
         messages=[
             *system_messages,
             *messages
@@ -329,7 +329,7 @@ elif chat_link:
 
     Let's have a jolly chat so I can learn more about you and prepare something wonderful for Christmas! 
 
-    **Note:** You can finish our chat at any time by clicking the "Enough chatting. Send to Gift Production! 🎅🎁" button.
+    **Note:** You can finish our chat at any time by clicking the "Enough chatting. Send to Gift Production! 🎁" button.
     """)
 
     # Get budget from the chat link data
@@ -383,7 +383,7 @@ elif chat_link:
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("Enough chatting. Send to Gift Production! 🎅🎁"):
+        if st.button("Enough chatting. Send to Gift Production! 🎁"):
             if len(st.session_state.messages) > 0:
                 try:
                     logging.info("Attempting to save chat and generate result link...")
@@ -400,7 +400,7 @@ elif chat_link:
                     if result_link:
                         full_result_url = f"{BASE_URL}?result={result_link}"
                         logging.info(f"Successfully generated result link: {result_link}")
-                        st.success("Ho ho ho! Your chat has been sent to Santa! 🎄✨")
+                        st.success("Ho ho ho! Your chat has been sent to Gift Production! 🎁")
                         st.code(full_result_url, language=None)
                         st.info("Share this link with your friend to see Santa's gift suggestions! 🎁")
                     else:
@@ -410,7 +410,7 @@ elif chat_link:
                     logging.error(f"Error saving chat: {str(e)}", exc_info=True)
                     st.error(f"Oh no! Something went wrong saving your chat: {str(e)}")
             else:
-                st.warning("There's nothing to send to Santa yet! Have a chat with the elf first! 🎅")
+                st.warning("There's nothing to send to Gift Production yet! Have a chat with Santa first! 🎅")
 
     with col2:
         if st.button("Restart Chat 🔄"):
